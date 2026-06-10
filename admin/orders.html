@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orders — Spice &amp; Ember Admin</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body class="admin-body">
+  <aside class="admin-sidebar">
+    <div class="admin-logo"><span class="flame-ico">🔥</span>Spice <span>&amp; Ember</span></div>
+    <nav class="admin-nav">
+      <a href="dashboard.html">📊 Dashboard</a>
+      <a href="orders.html" class="active">📦 Orders</a>
+      <a href="bookings.html">📅 Bookings</a>
+      <a href="menu-manage.html">🍽️ Menu</a>
+      <a href="../index.html">🌐 View Site</a>
+    </nav>
+    <div class="admin-sidebar-foot"><button class="admin-logout">🚪 Log Out</button></div>
+  </aside>
+  <div class="admin-overlay"></div>
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div style="display:flex;align-items:center;gap:14px"><button class="icon-btn admin-menu-toggle">☰</button><h1>Orders</h1></div>
+      <div class="admin-topbar-actions"><button class="icon-btn theme-toggle"><span class="sun-icon">☀️</span><span class="moon-icon" style="display:none">🌙</span></button></div>
+    </header>
+    <div class="admin-content">
+      <div class="admin-panel">
+        <div class="admin-panel-head">
+          <h2>All Orders</h2>
+          <select class="admin-filter" id="orderFilter">
+            <option value="all">All Statuses</option>
+            <option value="pending">Pending</option>
+            <option value="preparing">Preparing</option>
+            <option value="ready">Ready</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table">
+            <thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="ordersTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="../js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase.js"></script>
+  <script src="../js/menu-data.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>

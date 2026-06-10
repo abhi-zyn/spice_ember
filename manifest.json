@@ -1,0 +1,16 @@
+{
+  "name": "Spice & Ember",
+  "short_name": "Spice & Ember",
+  "description": "Where Fire Meets Flavor — a fire-crafted dining experience.",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#0d0b0a",
+  "theme_color": "#ff5722",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>\uD83D\uDD25</text></svg>",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

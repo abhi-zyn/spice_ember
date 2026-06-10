@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Menu — Spice &amp; Ember Admin</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body class="admin-body">
+  <aside class="admin-sidebar">
+    <div class="admin-logo"><span class="flame-ico">🔥</span>Spice <span>&amp; Ember</span></div>
+    <nav class="admin-nav">
+      <a href="dashboard.html">📊 Dashboard</a>
+      <a href="orders.html">📦 Orders</a>
+      <a href="bookings.html">📅 Bookings</a>
+      <a href="menu-manage.html" class="active">🍽️ Menu</a>
+      <a href="../index.html">🌐 View Site</a>
+    </nav>
+    <div class="admin-sidebar-foot"><button class="admin-logout">🚪 Log Out</button></div>
+  </aside>
+  <div class="admin-overlay"></div>
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div style="display:flex;align-items:center;gap:14px"><button class="icon-btn admin-menu-toggle">☰</button><h1>Menu Management</h1></div>
+      <div class="admin-topbar-actions"><button class="icon-btn theme-toggle"><span class="sun-icon">☀️</span><span class="moon-icon" style="display:none">🌙</span></button></div>
+    </header>
+    <div class="admin-content">
+      <div class="admin-grid-2">
+        <div class="admin-panel" style="padding:26px">
+          <h2 style="font-size:1.3rem;margin-bottom:18px">Add New Item</h2>
+          <form id="addMenuItemForm">
+            <div class="form-group"><label for="mi-name">Name</label><input id="mi-name" name="name" class="form-control" required></div>
+            <div class="form-group"><label for="mi-desc">Description</label><textarea id="mi-desc" name="description" class="form-control" required></textarea></div>
+            <div class="admin-form-grid">
+              <div class="form-group"><label for="mi-price">Price</label><input id="mi-price" name="price" type="number" step="0.01" min="0" class="form-control" required></div>
+              <div class="form-group"><label for="mi-cat">Category</label>
+                <select id="mi-cat" name="category" class="form-control" required>
+                  <option value="starters">Starters</option><option value="mains">Mains</option><option value="grills">Grills</option><option value="sides">Sides</option><option value="desserts">Desserts</option><option value="beverages">Beverages</option>
+                </select>
+              </div>
+            </div>
+            <div class="admin-form-grid">
+              <div class="form-group"><label for="mi-type">Type</label>
+                <select id="mi-type" name="type" class="form-control"><option value="veg">Veg</option><option value="non-veg">Non-Veg</option></select>
+              </div>
+              <div class="form-group"><label for="mi-spicy">Spice (0–3)</label><input id="mi-spicy" name="spicy" type="number" min="0" max="3" value="0" class="form-control"></div>
+            </div>
+            <div class="form-group"><label for="mi-img">Image URL</label><input id="mi-img" name="image" class="form-control" placeholder="https://… (optional)"></div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">Add to Menu</button>
+          </form>
+        </div>
+        <div class="admin-panel" style="padding:26px">
+          <h2 style="font-size:1.3rem;margin-bottom:18px">Current Menu</h2>
+          <div id="menuItemsList"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="../js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase.js"></script>
+  <script src="../js/menu-data.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/admin.js"></script>
+</body>
+</html>

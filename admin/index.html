@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login — Spice &amp; Ember</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <link rel="stylesheet" href="../css/style.css">
+  <link rel="stylesheet" href="../css/admin.css">
+</head>
+<body style="display:grid;place-items:center;min-height:100vh;padding:20px">
+  <div style="position:fixed;inset:0;z-index:-1;overflow:hidden">
+    <img src="https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=1600&q=80" alt="" style="width:100%;height:100%;object-fit:cover;opacity:.18">
+  </div>
+  <div class="modal" style="position:relative;transform:none;opacity:1;max-width:420px">
+    <div class="modal-logo">Spice <span>&amp; Ember</span></div>
+    <p class="modal-sub">Admin Control Panel</p>
+    <div class="modal-error" id="loginError">Invalid credentials. Try admin / admin123.</div>
+    <form id="adminLoginForm">
+      <div class="form-group"><label for="username">Username</label><input id="username" name="username" class="form-control" required placeholder="admin" autocomplete="username"></div>
+      <div class="form-group"><label for="password">Password</label><input id="password" name="password" type="password" class="form-control" required placeholder="••••••••" autocomplete="current-password"></div>
+      <button type="submit" class="btn btn-primary btn-block btn-lg">Sign In</button>
+      <p class="modal-hint">Demo credentials: <strong>admin</strong> / <strong>admin123</strong></p>
+    </form>
+    <p style="text-align:center;margin-top:18px"><a href="../index.html" style="color:var(--text-muted);font-size:.85rem">← Back to website</a></p>
+  </div>
+
+  <script src="../js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase.js"></script>
+  <script>
+    Utils.initTheme();
+    if (localStorage.getItem(CONFIG.adminKey) === 'true') window.location.href = 'dashboard.html';
+    document.getElementById('adminLoginForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const u = document.getElementById('username').value.trim();
+      const p = document.getElementById('password').value;
+      const err = document.getElementById('loginError');
+      if (u === CONFIG.adminUser && p === CONFIG.adminPass) {
+        localStorage.setItem(CONFIG.adminKey, 'true');
+        window.location.href = 'dashboard.html';
+      } else {
+        err.classList.add('show');
+      }
+    });
+  </script>
+</body>
+</html>

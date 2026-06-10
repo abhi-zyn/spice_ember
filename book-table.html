@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reserve a Table — Spice &amp; Ember</title>
+  <meta name="description" content="Reserve your table at Spice & Ember and secure a spot by the fire.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body data-page="book">
+  <div id="nav-mount"></div>
+
+  <section class="page-hero">
+    <div class="page-hero-bg"><img src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=1600&q=80" alt="Reserve"></div>
+    <div class="container">
+      <h1>Reserve a Table</h1>
+      <p>Join us for an unforgettable evening by the fire. Reservations confirmed within the hour.</p>
+      <div class="breadcrumb"><a href="index.html">Home</a> / <span>Reserve</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="split" style="align-items:start">
+        <div class="booking-info">
+          <span class="section-tag">Plan Your Visit</span>
+          <h2 class="section-title">An Evening<br>by the Flame</h2>
+          <p style="color:var(--text-soft);margin-bottom:28px">Whether it’s an intimate dinner or a celebration, our team will make sure your table is ready and your night is perfect.</p>
+          <div class="exp-features">
+            <div class="exp-feature"><div class="exp-feature-ico">🕒</div><div><h4>Opening Hours</h4><p>Mon–Thu 11am–10pm · Fri–Sat 11am–11pm · Sun 12pm–9pm</p></div></div>
+            <div class="exp-feature"><div class="exp-feature-ico">📍</div><div><h4>Location</h4><p>42 Flame Street, Culinary District, Mumbai 400001</p></div></div>
+            <div class="exp-feature"><div class="exp-feature-ico">📞</div><div><h4>Call Us</h4><p>+91 98765 43210</p></div></div>
+          </div>
+        </div>
+        <div class="booking-form-wrap" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:36px">
+          <h3 style="font-size:1.5rem;margin-bottom:22px">Book Your Table</h3>
+          <form id="bookingForm">
+            <div class="form-row">
+              <div class="form-group"><label for="bk-name">Full Name</label><input id="bk-name" name="name" class="form-control" required placeholder="Your name"></div>
+              <div class="form-group"><label for="bk-phone">Phone</label><input id="bk-phone" name="phone" class="form-control" required placeholder="+91…"></div>
+            </div>
+            <div class="form-group"><label for="bk-email">Email</label><input id="bk-email" name="email" type="email" class="form-control" required placeholder="you@email.com"></div>
+            <div class="form-row">
+              <div class="form-group"><label for="bk-date">Date</label><input id="bk-date" name="date" type="date" class="form-control" required></div>
+              <div class="form-group"><label for="bk-time">Time</label><input id="bk-time" name="time" type="time" class="form-control" required></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label for="bk-guests">Guests</label>
+                <select id="bk-guests" name="guests" class="form-control" required>
+                  <option value="">Select…</option>
+                  <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8+</option>
+                </select>
+              </div>
+              <div class="form-group"><label for="bk-occasion">Occasion</label>
+                <select id="bk-occasion" name="occasion" class="form-control">
+                  <option value="">None</option><option>Birthday</option><option>Anniversary</option><option>Business</option><option>Date Night</option><option>Celebration</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group"><label for="bk-notes">Special Requests</label><textarea id="bk-notes" name="notes" class="form-control" placeholder="Allergies, seating preference…"></textarea></div>
+            <button type="submit" class="btn btn-primary btn-block btn-lg">Reserve Table</button>
+          </form>
+          <div id="bookingSuccess" style="display:none;margin-top:20px">
+            <div class="toast toast-success" style="width:100%"><span class="toast-icon">✓</span><span>Reservation received! We’ll confirm by phone shortly.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="footer-mount"></div>
+
+  <script src="js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/menu-data.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

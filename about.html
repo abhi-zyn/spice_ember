@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About — Spice &amp; Ember</title>
+  <meta name="description" content="The story, philosophy and people behind Spice & Ember.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="about">
+  <div id="nav-mount"></div>
+
+  <section class="page-hero">
+    <div class="page-hero-bg"><img src="https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?w=1600&q=80" alt="About"></div>
+    <div class="container">
+      <h1>Our Story</h1>
+      <p>Born from a love of fire, flavour and the art of bringing people together.</p>
+      <div class="breadcrumb"><a href="index.html">Home</a> / <span>About</span></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="split">
+        <div class="split-img"><img src="https://images.unsplash.com/photo-1552566626-52f8b828add9?w=800&q=80" alt="Restaurant"></div>
+        <div>
+          <span class="section-tag">Est. 2010</span>
+          <h2 class="section-title">A Decade of<br>Fire &amp; Flavour</h2>
+          <p style="color:var(--text-soft);margin-bottom:16px">Spice &amp; Ember began with a single wood-fired grill and a simple belief: that fire transforms food into something primal and unforgettable. What started as a small neighbourhood kitchen has grown into one of the city’s most celebrated dining destinations.</p>
+          <p style="color:var(--text-soft)">Today, our chefs continue to honour those roots — sourcing the finest seasonal ingredients and cooking them the way nature intended: over open flame.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" style="background:var(--bg-alt)">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">What We Stand For</span>
+        <h2 class="section-title">Our Values</h2>
+      </div>
+      <div class="values-grid">
+        <div class="value-card"><div class="ico">🔥</div><h4>Fire First</h4><p>Every dish is shaped by flame, smoke and the craft of live-fire cooking.</p></div>
+        <div class="value-card"><div class="ico">🌿</div><h4>Honest Sourcing</h4><p>Seasonal, local and sustainable — we know every farm we work with.</p></div>
+        <div class="value-card"><div class="ico">✨</div><h4>Hospitality</h4><p>Warm, attentive service that makes every guest feel at home.</p></div>
+        <div class="value-card"><div class="ico">👨‍🍳</div><h4>Craft &amp; Mastery</h4><p>Skilled chefs perfecting their craft over open coals, every single day.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">The People</span>
+        <h2 class="section-title">Meet Our Chefs</h2>
+      </div>
+      <div class="team-grid">
+        <div class="team-card"><div class="team-card-img"><img src="https://images.unsplash.com/photo-1577219491135-ce391730fb2c?w=500&q=80" alt="Chef"></div><h4>Marcus Flynn</h4><div class="role">Executive Chef</div></div>
+        <div class="team-card"><div class="team-card-img"><img src="https://images.unsplash.com/photo-1583394293214-28a5b42b2f93?w=500&q=80" alt="Chef"></div><h4>Elena Rossi</h4><div class="role">Head of Grill</div></div>
+        <div class="team-card"><div class="team-card-img"><img src="https://images.unsplash.com/photo-1622021142947-da7dedc7c39a?w=500&q=80" alt="Chef"></div><h4>Devon Park</h4><div class="role">Pastry Chef</div></div>
+        <div class="team-card"><div class="team-card-img"><img src="https://images.unsplash.com/photo-1607631568010-a87245c0daf8?w=500&q=80" alt="Chef"></div><h4>Priya Nair</h4><div class="role">Mixologist</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Reviews -->
+  <section class="section" style="background:var(--bg-alt)">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">Share Your Experience</span>
+        <h2 class="section-title">Leave a Review</h2>
+      </div>
+      <div class="split" style="align-items:start">
+        <form id="reviewForm" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:32px">
+          <div class="form-group"><label for="rv-name">Your Name</label><input id="rv-name" name="name" class="form-control" required></div>
+          <div class="form-group"><label>Rating</label><div class="rating-input"><span>★</span><span>★</span><span>★</span><span>★</span><span>★</span></div></div>
+          <div class="form-group"><label for="rv-comment">Review</label><textarea id="rv-comment" name="comment" class="form-control" required placeholder="Tell us about your visit…"></textarea></div>
+          <button type="submit" class="btn btn-gold btn-block btn-lg">Submit Review</button>
+        </form>
+        <div id="reviewsList" class="testimonials-grid" style="grid-template-columns:1fr"></div>
+      </div>
+    </div>
+  </section>
+
+  <div id="footer-mount"></div>
+
+  <script src="js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/menu-data.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

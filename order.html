@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your Order — Spice &amp; Ember</title>
+  <meta name="description" content="Review your cart and check out securely at Spice & Ember.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/admin.css">
+</head>
+<body data-page="order">
+  <div id="nav-mount"></div>
+
+  <section class="page-hero" style="padding-bottom:50px">
+    <div class="page-hero-bg"><img src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=1600&q=80" alt="Order"></div>
+    <div class="container">
+      <h1>Your Order</h1>
+      <p>Review your selections and check out — free delivery on orders over ₹30.</p>
+      <div class="breadcrumb"><a href="index.html">Home</a> / <span>Order</span></div>
+    </div>
+  </section>
+
+  <section class="section" style="padding-top:50px">
+    <div class="container">
+      <div class="cart-layout">
+        <div class="cart-items"></div>
+        <div class="cart-summary"></div>
+      </div>
+
+      <!-- Checkout -->
+      <div id="checkoutSection" style="display:none;margin-top:48px;max-width:680px">
+        <div class="admin-panel" style="padding:34px">
+          <h2 style="font-size:1.6rem;margin-bottom:6px">Checkout</h2>
+          <p style="color:var(--text-muted);margin-bottom:24px">Enter your delivery details to complete the order.</p>
+          <form id="checkoutForm">
+            <div class="form-row">
+              <div class="form-group"><label for="checkoutName">Full Name</label><input id="checkoutName" name="name" class="form-control" required></div>
+              <div class="form-group"><label for="checkoutEmail">Email</label><input id="checkoutEmail" name="email" type="email" class="form-control" required></div>
+            </div>
+            <div class="form-group"><label for="checkoutPhone">Phone</label><input id="checkoutPhone" name="phone" class="form-control" required></div>
+            <div class="form-group"><label for="checkoutAddress">Delivery Address</label><textarea id="checkoutAddress" name="address" class="form-control" required placeholder="Street, city, postal code"></textarea><span id="savedAddressNote">✓ Using your saved address — edit if needed.</span></div>
+            <div class="form-group"><label for="checkoutNotes">Order Notes</label><input id="checkoutNotes" name="notes" class="form-control" placeholder="Optional"></div>
+            <div id="checkoutSummaryPreview"></div>
+            <div style="display:flex;gap:12px;margin-top:10px">
+              <button type="button" id="backToCartBtn" class="btn btn-ghost">Back to Cart</button>
+              <button type="submit" id="payBtn" class="btn btn-primary" style="flex:1">Pay Now</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Confirmation -->
+      <div id="confirmationSection" style="display:none;margin-top:48px;max-width:680px">
+        <div class="admin-panel" style="padding:48px;text-align:center">
+          <div style="font-size:3.4rem;margin-bottom:12px">🎉</div>
+          <h2 style="font-size:1.9rem;margin-bottom:8px">Order Confirmed!</h2>
+          <p style="color:var(--text-soft);margin-bottom:22px">Thank you for ordering with Spice &amp; Ember. Your fire-crafted meal is on its way.</p>
+          <div id="confirmationDetails" style="text-align:left;max-width:420px;margin:0 auto 26px;color:var(--text-soft)"></div>
+          <a href="menu.html" class="btn btn-primary btn-lg">Order Again</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="footer-mount"></div>
+
+  <script src="js/config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/menu-data.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/cart.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
