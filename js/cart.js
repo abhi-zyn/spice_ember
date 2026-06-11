@@ -1,5 +1,7 @@
 /* ============================================================
    SPICE & EMBER — CART
+   Cart lines are identified by `key` (item id + chosen add-ons) so the
+   same dish with different add-ons stays on separate lines.
    ============================================================ */
 
 const Cart = {
@@ -11,33 +13,44 @@ const Cart = {
     this.renderCartSummary();
   },
 
+  // Unit price including any chosen add-ons.
+  unitPrice(item) {
+    return (item.price || 0) + ((item.addons || []).reduce((s, a) => s + (a.price || 0), 0));
+  },
+  // Stable line key for an item + its add-ons.
+  lineKey(item) {
+    const addons = item.addons || [];
+    return item.key || (item.id + (addons.length ? '|' + addons.map(a => a.name).slice().sort().join(',') : ''));
+  },
+
   add(item) {
     const cart = this.get();
-    const existing = cart.find(i => i.id === item.id);
+    const key = this.lineKey(item);
+    const existing = cart.find(i => (i.key || i.id) === key);
     if (existing) existing.quantity += item.quantity || 1;
-    else cart.push({ id: item.id, name: item.name, price: item.price, image: item.image, type: item.type, quantity: item.quantity || 1 });
+    else cart.push({ id: item.id, key, name: item.name, price: item.price, image: item.image, type: item.type, addons: item.addons || [], quantity: item.quantity || 1 });
     this.save(cart);
     Utils.showToast(`${item.name} added to cart!`);
     this.animateBadge();
   },
 
-  remove(id) {
-    this.save(this.get().filter(i => i.id !== id));
+  remove(key) {
+    this.save(this.get().filter(i => (i.key || i.id) !== key));
     Utils.showToast('Item removed from cart', 'info');
   },
 
-  updateQuantity(id, qty) {
+  updateQuantity(key, qty) {
     const cart = this.get();
-    const item = cart.find(i => i.id === id);
+    const item = cart.find(i => (i.key || i.id) === key);
     if (!item) return;
-    if (qty <= 0) { this.remove(id); return; }
+    if (qty <= 0) { this.remove(key); return; }
     item.quantity = qty;
     this.save(cart);
   },
 
   clear() { this.save([]); },
 
-  getTotal() { return this.get().reduce((s, i) => s + i.price * i.quantity, 0); },
+  getTotal() { return this.get().reduce((s, i) => s + this.unitPrice(i) * i.quantity, 0); },
   getItemCount() { return this.get().reduce((s, i) => s + i.quantity, 0); },
   getTax() { return this.getTotal() * CONFIG.taxRate; },
   // No home delivery — dine in / take away only, so there is no delivery fee.
@@ -59,29 +72,36 @@ const Cart = {
       c.innerHTML = `<div class="empty-state"><div class="ico">🛒</div><h3>Your cart is empty</h3><p>Looks like you haven't added anything yet.</p><a href="menu.html" class="btn btn-primary" style="margin-top:18px">Browse Menu</a></div>`;
       return;
     }
-    c.innerHTML = cart.map(item => `
+    c.innerHTML = cart.map(item => {
+      const k = item.key || item.id;
+      const addonsHtml = (item.addons && item.addons.length)
+        ? `<div class="cart-item-addons" style="color:var(--text-muted);font-size:.8rem;margin-top:3px;line-height:1.5">${item.addons.map(a => '+ ' + a.name + ' (' + Utils.formatPrice(a.price) + ')').join('<br>')}</div>`
+        : '';
+      return `
       <div class="cart-item">
         <div class="cart-item-img"><img src="${item.image}" alt="${item.name}" loading="lazy"><span class="cart-item-tag ${item.type === 'veg' ? 'veg' : 'nonveg'}">${item.type === 'veg' ? 'V' : 'N'}</span></div>
         <div class="cart-item-info">
           <h4>${item.name}</h4>
-          <span class="cart-item-price">${Utils.formatPrice(item.price)}</span>
+          ${addonsHtml}
+          <span class="cart-item-price">${Utils.formatPrice(this.unitPrice(item))}</span>
         </div>
         <div class="cart-item-qty">
-          <button class="qty-btn qty-minus" data-id="${item.id}" aria-label="Decrease">−</button>
+          <button class="qty-btn qty-minus" data-key="${k}" aria-label="Decrease">−</button>
           <span>${item.quantity}</span>
-          <button class="qty-btn qty-plus" data-id="${item.id}" aria-label="Increase">+</button>
+          <button class="qty-btn qty-plus" data-key="${k}" aria-label="Increase">+</button>
         </div>
-        <div class="cart-item-total">${Utils.formatPrice(item.price * item.quantity)}</div>
-        <button class="cart-item-remove" data-id="${item.id}" aria-label="Remove">&times;</button>
-      </div>`).join('');
+        <div class="cart-item-total">${Utils.formatPrice(this.unitPrice(item) * item.quantity)}</div>
+        <button class="cart-item-remove" data-key="${k}" aria-label="Remove">&times;</button>
+      </div>`;
+    }).join('');
 
     c.querySelectorAll('.qty-minus').forEach(b => b.addEventListener('click', () => {
-      const i = cart.find(x => x.id === b.dataset.id); if (i) this.updateQuantity(b.dataset.id, i.quantity - 1);
+      const i = cart.find(x => (x.key || x.id) === b.dataset.key); if (i) this.updateQuantity(b.dataset.key, i.quantity - 1);
     }));
     c.querySelectorAll('.qty-plus').forEach(b => b.addEventListener('click', () => {
-      const i = cart.find(x => x.id === b.dataset.id); if (i) this.updateQuantity(b.dataset.id, i.quantity + 1);
+      const i = cart.find(x => (x.key || x.id) === b.dataset.key); if (i) this.updateQuantity(b.dataset.key, i.quantity + 1);
     }));
-    c.querySelectorAll('.cart-item-remove').forEach(b => b.addEventListener('click', () => this.remove(b.dataset.id)));
+    c.querySelectorAll('.cart-item-remove').forEach(b => b.addEventListener('click', () => this.remove(b.dataset.key)));
   },
 
   renderCartSummary() {

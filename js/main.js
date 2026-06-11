@@ -26,6 +26,7 @@ const App = {
 
   /* ---------- Item card markup ---------- */
   cardHtml(item) {
+    const hasAddons = Array.isArray(item.addons) && item.addons.length;
     return `
     <article class="menu-card reveal">
       <div class="menu-card-img">
@@ -37,7 +38,7 @@ const App = {
         <p class="menu-card-desc">${Utils.truncateText(item.description, 84)}</p>
         <div class="menu-card-rating">${Utils.getStarsHtml(item.rating)} <span>${item.rating} (${item.reviews})</span></div>
         <div class="menu-card-foot">
-          <span class="menu-card-price">${Utils.formatPrice(item.price)}</span>
+          <span class="menu-card-price">${Utils.formatPrice(item.price)}${hasAddons ? '<span style="font-size:.72rem;color:var(--text-muted);font-weight:500"> + extras</span>' : ''}</span>
           <button class="add-btn" aria-label="Add ${item.name} to cart" data-add="${item.id}">+</button>
         </div>
       </div>
@@ -49,8 +50,55 @@ const App = {
       btn.addEventListener('click', () => {
         if (typeof Auth !== 'undefined' && !Auth.requireLogin('add items to your cart')) return;
         const item = MenuData.getById(btn.dataset.add);
-        if (item) Cart.add({ id: item.id, name: item.name, price: item.price, image: item.image, type: item.type, quantity: 1 });
+        if (item) this.addToCartWithAddons(item);
       });
+    });
+  },
+
+  // If the dish has add-ons, ask first via a popup; otherwise add directly.
+  addToCartWithAddons(item) {
+    const addons = Array.isArray(item.addons) ? item.addons : [];
+    if (!addons.length) {
+      Cart.add({ id: item.id, name: item.name, price: item.price, image: item.image, type: item.type, quantity: 1 });
+      return;
+    }
+    this.openAddonModal(item, addons);
+  },
+
+  openAddonModal(item, addons) {
+    document.querySelector('.addon-overlay')?.remove();
+    const overlay = document.createElement('div');
+    overlay.className = 'addon-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);z-index:4000;display:flex;align-items:center;justify-content:center;padding:18px';
+    overlay.innerHTML = `
+      <div class="addon-modal" style="background:var(--surface,#1b1714);color:var(--text,#fff);max-width:430px;width:100%;border-radius:18px;padding:26px;box-shadow:0 20px 60px rgba(0,0,0,.5);max-height:90vh;overflow:auto">
+        <h3 style="margin:0 0 4px;font-size:1.3rem">Add extras to ${item.name}?</h3>
+        <p style="margin:0 0 18px;color:var(--text-muted,#aaa);font-size:.9rem">Pick any add-ons you'd like with this dish.</p>
+        <div class="addon-list" style="display:flex;flex-direction:column;gap:10px">
+          ${addons.map((a, i) => `
+            <label style="display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border-strong,#3a322c);border-radius:12px;cursor:pointer">
+              <input type="checkbox" data-addon="${i}" style="width:18px;height:18px;accent-color:#ff5722">
+              <span style="flex:1">${a.name}</span>
+              <span style="color:var(--text-muted,#aaa)">+${Utils.formatPrice(a.price)}</span>
+            </label>`).join('')}
+        </div>
+        <div style="display:flex;gap:12px;margin-top:22px">
+          <button class="btn btn-ghost addon-skip" style="flex:1">No, thanks</button>
+          <button class="btn btn-primary addon-confirm" style="flex:1">Add to Cart</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    const addWith = (selected) => {
+      Cart.add({ id: item.id, name: item.name, price: item.price, image: item.image, type: item.type, addons: selected, quantity: 1 });
+      close();
+    };
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    overlay.querySelector('.addon-skip').addEventListener('click', () => addWith([]));
+    overlay.querySelector('.addon-confirm').addEventListener('click', () => {
+      const selected = [...overlay.querySelectorAll('[data-addon]:checked')].map(cb => addons[parseInt(cb.dataset.addon, 10)]);
+      addWith(selected);
     });
   },
 
@@ -80,7 +128,7 @@ const App = {
     if (!c) return;
     const items = MenuData.filter({ category: this.currentCategory, sortBy: this.currentSort, search: this.searchQuery });
     if (!items.length) {
-      c.innerHTML = `<div class="empty-state"><div class="ico">\uD83D\uDD0D</div><h3>No items found</h3><p>Try adjusting your search or filters.</p></div>`;
+      c.innerHTML = `<div class="empty-state"><div class="ico">🔍</div><h3>No items found</h3><p>Try adjusting your search or filters.</p></div>`;
       return;
     }
     c.innerHTML = items.map(i => this.cardHtml(i)).join('');
@@ -114,7 +162,7 @@ const App = {
       if (typeof Auth !== 'undefined' && !Auth.requireLogin('make a reservation')) return;
       const fd = new FormData(form);
       const btn = form.querySelector('button[type="submit"]');
-      btn.disabled = true; btn.textContent = 'Reserving\u2026';
+      btn.disabled = true; btn.textContent = 'Reserving…';
       try {
         await API.createBooking({
           name: fd.get('name'), email: fd.get('email'), phone: fd.get('phone'),
@@ -128,7 +176,7 @@ const App = {
         form.reset();
         const success = document.getElementById('bookingSuccess');
         if (success) { success.style.display = 'block'; success.scrollIntoView({ behavior: 'smooth' }); }
-        Utils.showToast('Table reserved! We\u2019ll confirm shortly.', 'success');
+        Utils.showToast('Table reserved! We’ll confirm shortly.', 'success');
       } catch { Utils.showToast('Could not reserve. Try again.', 'error'); }
       finally { btn.disabled = false; btn.textContent = 'Reserve Table'; }
     });
@@ -164,11 +212,11 @@ const App = {
     if (!reviews.length) { c.innerHTML = '<p style="color:var(--text-muted);text-align:center">Be the first to leave a review!</p>'; return; }
     c.innerHTML = reviews.slice(0, 6).map(r => `
       <div class="testimonial-card reveal">
-        <div class="quote-mark">\u201C</div>
+        <div class="quote-mark">“</div>
         <p>${r.comment}</p>
         <div class="testimonial-author">
           <div class="avatar-fallback">${(r.name || 'G')[0].toUpperCase()}</div>
-          <div><div class="name">${r.name}</div><div class="stars">${'\u2605'.repeat(r.rating)}${'\u2606'.repeat(5 - r.rating)}</div></div>
+          <div><div class="name">${r.name}</div><div class="stars">${'★'.repeat(r.rating)}${'☆'.repeat(5 - r.rating)}</div></div>
         </div>
       </div>`).join('');
     this.observeReveals(c);
@@ -213,7 +261,7 @@ const App = {
         (when ? '<div class="order-date" style="color:var(--text-muted);font-size:.82rem">' + when + '</div>' : '') +
         tracker +
         '<div class="order-card-foot"><span style="color:var(--text-muted);font-size:.85rem">' +
-        (o.delivery_address ? o.delivery_address : '') + '</span><strong>' +
+        (o.order_type ? o.order_type : '') + '</span><strong>' +
         Utils.formatPrice(parseFloat(o.total) || 0) + '</strong></div>' +
       '</div>';
     }).join('');
@@ -225,7 +273,7 @@ const App = {
     if (!form) return;
     form.addEventListener('submit', e => {
       e.preventDefault(); form.reset();
-      Utils.showToast('Message sent! We\u2019ll be in touch.', 'success');
+      Utils.showToast('Message sent! We’ll be in touch.', 'success');
     });
   },
   initNewsletter() {
