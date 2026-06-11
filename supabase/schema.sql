@@ -18,6 +18,22 @@ create table if not exists public.payments (
   order_payload jsonb
 );
 
+-- If the payments table was created EARLIER with fewer columns, add any that
+-- are missing. These are no-ops on a fresh install. This is what fixes the
+-- "Could not find the 'currency' column of 'payments'" error after payment.
+alter table public.payments add column if not exists created_at timestamptz not null default now();
+alter table public.payments add column if not exists user_id uuid;
+alter table public.payments add column if not exists razorpay_order_id text;
+alter table public.payments add column if not exists razorpay_payment_id text;
+alter table public.payments add column if not exists razorpay_signature text;
+alter table public.payments add column if not exists amount numeric;
+alter table public.payments add column if not exists currency text default 'INR';
+alter table public.payments add column if not exists status text default 'paid';
+alter table public.payments add column if not exists customer_name text;
+alter table public.payments add column if not exists customer_email text;
+alter table public.payments add column if not exists customer_phone text;
+alter table public.payments add column if not exists order_payload jsonb;
+
 alter table public.payments enable row level security;
 
 -- Logged-in users can read only their own payments.
