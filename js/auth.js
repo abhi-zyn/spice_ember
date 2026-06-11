@@ -134,7 +134,6 @@ const Auth = {
             '<div id="loginCaptcha" class="cf-turnstile" style="margin:4px 0 12px;"></div>' +
             '<button type="submit" class="btn btn-primary btn-block btn-lg">Sign In</button>' +
             '<button type="button" class="btn btn-ghost btn-block" id="magicLoginBtn" style="margin-top:10px;">Email me a login link</button>' +
-            '<p class="modal-hint">Admin? Use <strong>admin</strong> / <strong>admin123</strong></p>' +
           '</form>' +
           '<form class="modal-form-section" id="signupForm" data-auth-section="signup">' +
             '<div class="form-group"><label for="signupName">Full Name</label><input type="text" id="signupName" class="form-control" placeholder="Your name" required autocomplete="name"></div>' +
