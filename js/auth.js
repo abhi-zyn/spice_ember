@@ -12,6 +12,9 @@ const Auth = {
   isAdmin: false,
   _profile: null,
   _captcha: { login: null, signup: null },
+  _captchaHlTimer: null,
+  // Appended to error messages so users know a refresh may help.
+  _refreshHint: ' If the problem continues, please refresh the page and try again.',
 
   async init() {
     this.injectModal();
@@ -69,10 +72,18 @@ const Auth = {
       const loginEl = document.getElementById('loginCaptcha');
       const signupEl = document.getElementById('signupCaptcha');
       if (loginEl && this._captcha.login === null) {
-        this._captcha.login = window.turnstile.render(loginEl, { sitekey: siteKey, theme: 'auto' });
+        this._captcha.login = window.turnstile.render(loginEl, {
+          sitekey: siteKey, theme: 'auto',
+          'error-callback': () => { this._resetCaptcha('login'); },
+          'expired-callback': () => { this._resetCaptcha('login'); }
+        });
       }
       if (signupEl && this._captcha.signup === null) {
-        this._captcha.signup = window.turnstile.render(signupEl, { sitekey: siteKey, theme: 'auto' });
+        this._captcha.signup = window.turnstile.render(signupEl, {
+          sitekey: siteKey, theme: 'auto',
+          'error-callback': () => { this._resetCaptcha('signup'); },
+          'expired-callback': () => { this._resetCaptcha('signup'); }
+        });
       }
     };
     if (window.turnstile && window.turnstile.render) { render(); return; }
@@ -103,11 +114,43 @@ const Auth = {
       if (window.turnstile && id !== null && id !== undefined) window.turnstile.reset(id);
     } catch (_) {}
   },
+  // Visually draw attention to the captcha widget for the given mode.
+  _highlightCaptcha(mode) {
+    const el = document.getElementById(mode === 'signup' ? 'signupCaptcha' : 'loginCaptcha');
+    if (!el) return;
+    try { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+    el.style.outline = '2px solid #ff5722';
+    el.style.outlineOffset = '4px';
+    el.style.borderRadius = '8px';
+    try {
+      el.animate([
+        { transform: 'translateX(0)' },
+        { transform: 'translateX(-6px)' },
+        { transform: 'translateX(6px)' },
+        { transform: 'translateX(-4px)' },
+        { transform: 'translateX(4px)' },
+        { transform: 'translateX(0)' }
+      ], { duration: 420, easing: 'ease-in-out' });
+    } catch (_) {}
+    clearTimeout(this._captchaHlTimer);
+    this._captchaHlTimer = setTimeout(() => { el.style.outline = ''; el.style.outlineOffset = ''; }, 3000);
+  },
   // Returns { ok, token }. When captcha is disabled, ok:true and token:undefined.
   _requireCaptcha(mode) {
     if (!this._captchaKey()) return { ok: true, token: undefined };
+    // Widget never rendered — the verification couldn't load (script blocked,
+    // offline, etc). Try to load it again and ask the user to refresh.
+    if (this._captcha[mode] === null || this._captcha[mode] === undefined) {
+      this._initCaptcha();
+      this.showError('Verification could not load.' + this._refreshHint);
+      return { ok: false };
+    }
     const token = this._getCaptchaToken(mode);
-    if (!token) { this.showError('Please complete the captcha verification.'); return { ok: false }; }
+    if (!token) {
+      this._highlightCaptcha(mode);
+      this.showError('Please complete the verification below before continuing.');
+      return { ok: false };
+    }
     return { ok: true, token };
   },
 
@@ -228,6 +271,8 @@ const Auth = {
   },
 
   showError(msg) { const e = document.getElementById('authError'); if (e) { e.textContent = msg; e.classList.add('show'); } },
+  // Show an error and remind the user a refresh may fix it.
+  showFatal(msg) { this.showError((msg || 'Something went wrong.') + this._refreshHint); },
   hideError() { const e = document.getElementById('authError'); if (e) e.classList.remove('show'); },
 
   /* ---------- Google ---------- */
@@ -238,8 +283,8 @@ const Auth = {
     }
     try {
       const { error } = await SB.client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.href } });
-      if (error) this.showError(error.message);
-    } catch (e) { this.showError('Could not start Google sign-in.'); }
+      if (error) this.showFatal(error.message);
+    } catch (e) { this.showFatal('Could not start Google sign-in.'); }
   },
 
   /* ---------- Magic link (passwordless email verification) ---------- */
@@ -263,10 +308,10 @@ const Auth = {
     try {
       const { error } = await SB.client.auth.signInWithOtp({ email, options });
       this._resetCaptcha(mode);
-      if (error) { this.showError(error.message); return; }
+      if (error) { this.showFatal(error.message); return; }
       this.hideError();
       this.showMagicSent(email);
-    } catch (e) { this._resetCaptcha(mode); this.showError('Could not send the magic link. Please try again.'); }
+    } catch (e) { this._resetCaptcha(mode); this.showFatal('Could not send the magic link.'); }
   },
 
   /* ---------- Email / password ---------- */
@@ -289,12 +334,14 @@ const Auth = {
       if (!cap.ok) return;
       const options = {};
       if (cap.token !== undefined) options.captchaToken = cap.token;
-      const { error } = await SB.client.auth.signInWithPassword({ email, password, options });
-      this._resetCaptcha('login');
-      if (error) { this.showError(error.message || 'Invalid email or password.'); return; }
-      this._profile = null;
-      Utils.showToast('Welcome back!', 'success');
-      this.close();
+      try {
+        const { error } = await SB.client.auth.signInWithPassword({ email, password, options });
+        this._resetCaptcha('login');
+        if (error) { this.showFatal(error.message || 'Invalid email or password.'); return; }
+        this._profile = null;
+        Utils.showToast('Welcome back!', 'success');
+        this.close();
+      } catch (err) { this._resetCaptcha('login'); this.showFatal('Could not sign you in.'); }
       return;
     }
 
@@ -317,12 +364,14 @@ const Auth = {
       if (!cap.ok) return;
       const options = { data: { full_name: name }, emailRedirectTo: window.location.origin + window.location.pathname };
       if (cap.token !== undefined) options.captchaToken = cap.token;
-      const { data, error } = await SB.client.auth.signUp({ email, password, options });
-      this._resetCaptcha('signup');
-      if (error) { this.showError(error.message); return; }
-      if (data.user) { try { await SB.client.from('profiles').upsert({ id: data.user.id, full_name: name, email }); } catch (_) {} }
-      if (data.session) { Utils.showToast('Welcome, ' + name + '!', 'success'); this.close(); }
-      else { this.showMagicSent(email); }
+      try {
+        const { data, error } = await SB.client.auth.signUp({ email, password, options });
+        this._resetCaptcha('signup');
+        if (error) { this.showFatal(error.message); return; }
+        if (data.user) { try { await SB.client.from('profiles').upsert({ id: data.user.id, full_name: name, email }); } catch (_) {} }
+        if (data.session) { Utils.showToast('Welcome, ' + name + '!', 'success'); this.close(); }
+        else { this.showMagicSent(email); }
+      } catch (err) { this._resetCaptcha('signup'); this.showFatal('Could not create your account.'); }
       return;
     }
 
