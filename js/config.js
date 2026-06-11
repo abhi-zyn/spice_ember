@@ -30,6 +30,9 @@ const CONFIG = {
   // Razorpay — paste your PUBLIC Key ID here (starts with rzp_test_ or rzp_live_).
   // Leave blank ('') to use simulated payments. NEVER put your Key SECRET in client code.
   razorpayKeyId: '',
+  // Cloudflare Turnstile site key (public). Enable Turnstile in Supabase Auth
+  // (Bot & Abuse Protection) and paste the SECRET there. Leave '' to disable.
+  turnstileSiteKey: '0x4AAAAAADiVqzp_OHifz8KW',
   // Storage keys
   storageKey: 'spice-ember-cart',
   bookingsKey: 'spice-ember-bookings',
