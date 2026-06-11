@@ -43,7 +43,7 @@ const Components = {
       { id: 'home', label: 'Home', href: b + 'index.html' },
       { id: 'menu', label: 'Menu', href: b + 'menu.html' },
       { id: 'book', label: 'Reserve', href: b + 'book-table.html' },
-      { id: 'order', label: 'Order', href: b + 'order.html' },
+      { id: 'order', label: 'Cart', href: b + 'order.html' },
       { id: 'orders', label: 'My Orders', href: b + 'my-orders.html' },
       { id: 'about', label: 'About', href: b + 'about.html' }
     ];
