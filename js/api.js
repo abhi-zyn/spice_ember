@@ -236,9 +236,12 @@ const RazorpayPayment = {
     return json;
   },
 
+  // Opens Razorpay Checkout and resolves with the success response, or rejects
+  // on dismiss/failure.
   _openCheckout(options) {
     return new Promise((resolve, reject) => {
       const opts = { ...options };
+      opts.handler = (response) => resolve(response);
       opts.modal = { ondismiss() { reject(new Error('Payment cancelled.')); } };
       try {
         const rzp = new window.Razorpay(opts);
@@ -287,7 +290,7 @@ const RazorpayPayment = {
           },
           notes: { address: orderDetails.delivery_address || orderDetails.address || '' },
           theme: { color: '#ff5722' }
-        }).then(handlerArgsToResponse);
+        });
 
         // Verify + log on the server before resolving success.
         const result = await this._callFn('verify-payment', {
@@ -322,7 +325,7 @@ const RazorpayPayment = {
         },
         notes: { address: orderDetails.delivery_address || orderDetails.address || '' },
         theme: { color: '#ff5722' }
-      }).then(handlerArgsToResponse);
+      });
       return { success: true, verified: false, payment_id: response.razorpay_payment_id, raw: response };
     }
 
@@ -333,8 +336,3 @@ const RazorpayPayment = {
     });
   }
 };
-
-/* Bridges Razorpay's success `handler(response)` callback into the Promise
-   returned by _openCheckout. We attach the handler lazily here so both flows
-   share the same Checkout-opening code. */
-function handlerArgsToResponse(_) { return _; }
