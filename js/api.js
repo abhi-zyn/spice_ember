@@ -82,6 +82,16 @@ const API = {
     return true;
   },
 
+  /* ---------------- PAYMENTS ---------------- */
+  async getPayments() {
+    if (this._enabled()) {
+      const { data, error } = await SB.client.from('payments').select('*').order('created_at', { ascending: false });
+      if (error) throw new Error(error.message);
+      return data || [];
+    }
+    return Utils.getFromStorage('spice-ember-payments') || [];
+  },
+
   /* ---------------- BOOKINGS ---------------- */
   async createBooking(booking) {
     const uid = this._uid();
@@ -187,33 +197,121 @@ const API = {
 };
 
 /* ---------------- PAYMENT (Razorpay) ----------------
-   Opens the real Razorpay Checkout when a Key ID + SDK are available.
-   Falls back to a simulated success so the site still works offline
-   or before you add your Razorpay Key ID in js/config.js.
-
-   IMPORTANT: This is a client-only integration (no order_id). For a
-   production live setup you should also verify the payment signature
-   on a server (e.g. a Supabase Edge Function) using your Razorpay Key
-   SECRET. Never put the Key Secret in this client code.
+   Three modes, chosen automatically:
+   1) SERVER-VERIFIED (recommended): when Supabase is configured, calls the
+      `create-order` Edge Function for a tamper-proof order_id, opens Checkout,
+      then calls `verify-payment` to verify the signature server-side and log
+      the payment to the `payments` table. See SETUP_PAYMENTS.md.
+   2) CLIENT-ONLY: a Razorpay Key ID is set in config but the functions aren't
+      reachable — opens Checkout without server verification.
+   3) SIMULATED: nothing configured — resolves a fake success so the site works.
+   The Key SECRET never lives in this client code.
    ---------------------------------------------------- */
 const RazorpayPayment = {
-  initiatePayment(orderDetails = {}) {
-    const amount = Number((orderDetails && (orderDetails.total ?? orderDetails.amount)) || 0);
-    const keyId = (typeof CONFIG !== 'undefined' && CONFIG.razorpayKeyId) ? CONFIG.razorpayKeyId : '';
+  _fnBase() {
+    let base = (typeof CONFIG !== 'undefined' && CONFIG.supabaseUrl) ? CONFIG.supabaseUrl : '';
+    if (base.endsWith('/')) base = base.slice(0, -1);
+    return base ? base + '/functions/v1' : '';
+  },
+  _serverEnabled() {
+    return typeof SB !== 'undefined' && SB.enabled && !!this._fnBase();
+  },
+  async _callFn(name, payload) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (typeof CONFIG !== 'undefined' && CONFIG.supabaseAnonKey) {
+      headers['apikey'] = CONFIG.supabaseAnonKey;
+      headers['Authorization'] = 'Bearer ' + CONFIG.supabaseAnonKey;
+    }
+    try {
+      const { data } = await SB.client.auth.getSession();
+      if (data && data.session && data.session.access_token) {
+        headers['Authorization'] = 'Bearer ' + data.session.access_token;
+      }
+    } catch (_) {}
+    const res = await fetch(this._fnBase() + '/' + name, {
+      method: 'POST', headers, body: JSON.stringify(payload || {})
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || ('Request failed: ' + name));
+    return json;
+  },
 
-    // Fallback — no key configured or SDK not loaded: simulate a payment.
-    if (!keyId || typeof window === 'undefined' || typeof window.Razorpay === 'undefined') {
-      console.info('[Razorpay] No Key ID configured or SDK missing — using a simulated payment.');
-      return new Promise(resolve => {
-        setTimeout(() => resolve({ success: true, simulated: true, payment_id: 'pay_sim_' + Utils.generateId() }), 900);
-      });
+  _openCheckout(options) {
+    return new Promise((resolve, reject) => {
+      const opts = { ...options };
+      opts.modal = { ondismiss() { reject(new Error('Payment cancelled.')); } };
+      try {
+        const rzp = new window.Razorpay(opts);
+        rzp.on('payment.failed', resp => {
+          reject(new Error((resp && resp.error && resp.error.description) || 'Payment failed. Please try again.'));
+        });
+        rzp.open();
+      } catch (e) {
+        reject(new Error('Could not open Razorpay Checkout.'));
+      }
+    });
+  },
+
+  async initiatePayment(orderDetails = {}) {
+    const amount = Number((orderDetails && (orderDetails.total ?? orderDetails.amount)) || 0);
+    const hasSdk = typeof window !== 'undefined' && typeof window.Razorpay !== 'undefined';
+
+    /* ---- Mode 1: server-verified flow ---- */
+    if (this._serverEnabled() && hasSdk) {
+      let created = null;
+      try {
+        created = await this._callFn('create-order', {
+          amount,
+          currency: 'INR',
+          receipt: 'order_' + Utils.generateId(),
+          notes: {
+            customer_email: orderDetails.customer_email || '',
+            customer_phone: orderDetails.customer_phone || ''
+          }
+        });
+      } catch (e) {
+        console.warn('[Razorpay] create-order unavailable, falling back:', e.message);
+      }
+      if (created && created.id) {
+        const response = await this._openCheckout({
+          key: created.key_id || CONFIG.razorpayKeyId,
+          order_id: created.id,
+          amount: created.amount,
+          currency: created.currency || 'INR',
+          name: CONFIG.appName || 'Spice & Ember',
+          description: 'Food order payment',
+          prefill: {
+            name: orderDetails.customer_name || orderDetails.name || '',
+            email: orderDetails.customer_email || orderDetails.email || '',
+            contact: orderDetails.customer_phone || orderDetails.phone || ''
+          },
+          notes: { address: orderDetails.delivery_address || orderDetails.address || '' },
+          theme: { color: '#ff5722' }
+        }).then(handlerArgsToResponse);
+
+        // Verify + log on the server before resolving success.
+        const result = await this._callFn('verify-payment', {
+          razorpay_order_id: response.razorpay_order_id,
+          razorpay_payment_id: response.razorpay_payment_id,
+          razorpay_signature: response.razorpay_signature,
+          order: orderDetails
+        });
+        if (!result || !result.verified) throw new Error('Payment could not be verified.');
+        return {
+          success: true, verified: true,
+          payment_id: response.razorpay_payment_id,
+          razorpay_order_id: response.razorpay_order_id,
+          payment: result.payment, raw: response
+        };
+      }
     }
 
-    // Real Razorpay Checkout (client-only flow).
-    return new Promise((resolve, reject) => {
-      const options = {
+    /* ---- Mode 2: client-only flow ---- */
+    const keyId = (typeof CONFIG !== 'undefined' && CONFIG.razorpayKeyId) ? CONFIG.razorpayKeyId : '';
+    if (keyId && hasSdk) {
+      const response = await this._openCheckout({
         key: keyId,
-        amount: Math.round(amount * 100), // amount in the smallest currency unit (paise)
+        amount: Math.round(amount * 100),
         currency: 'INR',
         name: CONFIG.appName || 'Spice & Ember',
         description: 'Food order payment',
@@ -223,23 +321,20 @@ const RazorpayPayment = {
           contact: orderDetails.customer_phone || orderDetails.phone || ''
         },
         notes: { address: orderDetails.delivery_address || orderDetails.address || '' },
-        theme: { color: '#ff5722' },
-        handler(response) {
-          resolve({ success: true, payment_id: response.razorpay_payment_id, raw: response });
-        },
-        modal: {
-          ondismiss() { reject(new Error('Payment cancelled.')); }
-        }
-      };
-      try {
-        const rzp = new window.Razorpay(options);
-        rzp.on('payment.failed', resp => {
-          reject(new Error((resp && resp.error && resp.error.description) || 'Payment failed. Please try again.'));
-        });
-        rzp.open();
-      } catch (e) {
-        reject(new Error('Could not open Razorpay Checkout.'));
-      }
+        theme: { color: '#ff5722' }
+      }).then(handlerArgsToResponse);
+      return { success: true, verified: false, payment_id: response.razorpay_payment_id, raw: response };
+    }
+
+    /* ---- Mode 3: simulated fallback ---- */
+    console.info('[Razorpay] No key/SDK/server — using a simulated payment.');
+    return new Promise(resolve => {
+      setTimeout(() => resolve({ success: true, simulated: true, verified: false, payment_id: 'pay_sim_' + Utils.generateId() }), 900);
     });
   }
 };
+
+/* Bridges Razorpay's success `handler(response)` callback into the Promise
+   returned by _openCheckout. We attach the handler lazily here so both flows
+   share the same Checkout-opening code. */
+function handlerArgsToResponse(_) { return _; }
