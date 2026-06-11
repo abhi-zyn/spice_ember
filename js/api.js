@@ -38,8 +38,11 @@ const API = {
     const payload = { ...order, user_id: order.user_id || uid || null };
     if (this._enabled()) {
       const { data, error } = await SB.client.from('orders').insert(payload).select().maybeSingle();
-      if (error) throw new Error(error.message);
-      return data;
+      if (!error && data) return data;
+      // The DB insert failed (e.g. RLS or a missing column). Do NOT lose the
+      // order — log the exact reason and keep a local backup instead.
+      console.error('[createOrder] Supabase insert failed — saving order locally as a backup. Reason:', error && error.message, error);
+      Utils.showToast && Utils.showToast('Saved your order locally (database sync issue) — see console.', 'info');
     }
     const orders = Utils.getOrders();
     const row = { id: Utils.generateId(), created_at: new Date().toISOString(), status: 'pending', ...payload };

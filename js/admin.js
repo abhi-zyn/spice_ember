@@ -40,9 +40,6 @@ const Admin = {
     });
   },
 
-  /* ---------- Login page ---------- */
-  // (handled inline in admin/index.html)
-
   /* ---------- Dashboard ---------- */
   async initDashboard() {
     if (!document.getElementById('dashboardCards')) return;
@@ -114,6 +111,27 @@ const Admin = {
     const f = document.getElementById('orderFilter');
     f?.addEventListener('change', () => this.renderOrders(f.value));
   },
+
+  // Status flow: pending → preparing → ready → delivered.
+  // Delivered and cancelled are TERMINAL — no further actions, no cancel.
+  orderActions(o) {
+    const s = (o.status || 'pending').toLowerCase();
+    if (s === 'delivered') return `<span class="order-locked" style="color:#34d399;font-weight:600">✓ Delivered</span>`;
+    if (s === 'cancelled') return `<span class="order-locked" style="color:#f87171;font-weight:600">✕ Cancelled</span>`;
+    const flow = {
+      pending:   { action: 'preparing', label: 'Accept' },
+      confirmed: { action: 'preparing', label: 'Accept' },
+      preparing: { action: 'ready',     label: 'Mark Prepared' },
+      ready:     { action: 'delivered', label: 'Mark Delivered' }
+    };
+    const step = flow[s];
+    let html = '';
+    if (step) html += `<button class="mini-btn ok order-action" data-id="${o.id}" data-action="${step.action}" data-label="${step.label}">${step.label}</button>`;
+    // Cancel is only available before the order is delivered/cancelled.
+    html += `<button class="mini-btn danger order-action" data-id="${o.id}" data-action="cancelled" data-label="Cancel">Cancel</button>`;
+    return html;
+  },
+
   async renderOrders(filter = 'all') {
     const tb = document.getElementById('ordersTable');
     if (!tb) return;
@@ -129,19 +147,27 @@ const Admin = {
           <td><span class="status-pill" style="--c:${Utils.getStatusColor(o.status)}">${o.status}</span></td>
           <td>${Utils.formatDate(o.created_at)}<br><span class="td-sub">${Utils.formatTime(o.created_at)}</span></td>
           <td>${o.delivered_at ? `${Utils.formatDate(o.delivered_at)}<br><span class="td-sub">${Utils.formatTime(o.delivered_at)}</span>` : '—'}</td>
-          <td class="td-actions">
-            <button class="mini-btn order-action" data-id="${o.id}" data-action="preparing">Prepare</button>
-            <button class="mini-btn ok order-action" data-id="${o.id}" data-action="ready">Ready</button>
-            <button class="mini-btn ok order-action" data-id="${o.id}" data-action="delivered">Deliver</button>
-            <button class="mini-btn danger order-action" data-id="${o.id}" data-action="cancelled">Cancel</button>
-          </td>
+          <td class="td-actions">${this.orderActions(o)}</td>
         </tr>`).join('');
-      tb.querySelectorAll('.order-action').forEach(btn => btn.addEventListener('click', () => this.updateOrder(btn.dataset.id, btn.dataset.action)));
+      tb.querySelectorAll('.order-action').forEach(btn => btn.addEventListener('click', () => this.updateOrder(btn.dataset.id, btn.dataset.action, btn.dataset.label)));
     } catch (e) { tb.innerHTML = `<tr><td colspan="8" class="td-empty">Error loading orders</td></tr>`; }
   },
-  async updateOrder(id, status) {
-    await API.updateOrderStatus(id, status);
-    Utils.showToast(`Order set to ${status}`, 'success');
+
+  async updateOrder(id, status, label) {
+    // Confirm before every status change; warn clearly on terminal actions.
+    const prompts = {
+      cancelled: 'Cancel this order? This cannot be undone.',
+      delivered: 'Mark this order as Delivered? Once delivered it can no longer be changed or cancelled.'
+    };
+    const msg = prompts[status] || `${label || 'Update this order'} — confirm?`;
+    if (!window.confirm(msg)) return;
+    try {
+      await API.updateOrderStatus(id, status);
+      const said = status === 'preparing' ? 'accepted' : status;
+      Utils.showToast(`Order ${said}`, 'success');
+    } catch (e) {
+      Utils.showToast(e.message || 'Could not update order', 'error');
+    }
     this.renderOrders(document.getElementById('orderFilter')?.value || 'all');
   },
 
