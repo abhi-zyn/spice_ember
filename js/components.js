@@ -55,7 +55,7 @@ const Components = {
     return `
     <nav class="navbar" id="navbar">
       <div class="nav-inner">
-        <a href="${b}index.html" class="nav-logo"><span class="flame-ico">\uD83D\uDD25</span>Spice <span>&amp; Ember</span></a>
+        <a href="${b}index.html" class="nav-logo"><span class="flame-ico">🔥</span>Spice <span>&amp; Ember</span></a>
         <div class="nav-links">${this.navLinks(active)}</div>
         <div class="nav-actions">
           <button class="icon-btn theme-toggle" aria-label="Toggle theme">
@@ -71,11 +71,16 @@ const Components = {
     <div class="mobile-menu-overlay"></div>
     <aside class="mobile-menu">
       <div class="mobile-menu-head">
-        <span class="nav-logo" style="font-size:1.3rem"><span class="flame-ico">\uD83D\uDD25</span>Spice <span>&amp; Ember</span></span>
+        <span class="nav-logo" style="font-size:1.3rem"><span class="flame-ico">🔥</span>Spice <span>&amp; Ember</span></span>
         <button class="icon-btn mobile-menu-close" aria-label="Close">&times;</button>
       </div>
       ${this.navLinks(active)}
-      <button class="btn btn-primary" data-auth-open>Login / Sign Up</button>
+      <button class="btn btn-primary" data-auth-open data-auth-mobile-login>Login / Sign Up</button>
+      <div class="mobile-account" data-auth-mobile-account style="display:none">
+        <div class="mobile-account-name" data-auth-mobile-name></div>
+        <a href="${b}my-orders.html" class="btn btn-ghost btn-block" style="margin-bottom:8px">My Orders</a>
+        <button class="btn btn-primary btn-block" data-auth-logout>Log Out</button>
+      </div>
     </aside>`;
   },
 
@@ -86,7 +91,7 @@ const Components = {
       <div class="container">
         <div class="footer-grid">
           <div class="footer-brand">
-            <a href="${b}index.html" class="nav-logo"><span class="flame-ico">\uD83D\uDD25</span>Spice <span>&amp; Ember</span></a>
+            <a href="${b}index.html" class="nav-logo"><span class="flame-ico">🔥</span>Spice <span>&amp; Ember</span></a>
             <p>Where fire meets flavor. Wood-fired cooking, smoked specialties and craft cocktails in the heart of the culinary district.</p>
             <div class="footer-social">
               <a href="${CONFIG.social.instagram}" target="_blank" rel="noopener" aria-label="Instagram">${this.icon('insta')}</a>
@@ -121,7 +126,7 @@ const Components = {
         </div>
         <div class="footer-bottom">
           <span>&copy; ${new Date().getFullYear()} Spice &amp; Ember. All rights reserved.</span>
-          <span>Crafted with fire \uD83D\uDD25</span>
+          <span>Crafted with fire 🔥</span>
         </div>
       </div>
     </footer>`;
@@ -159,5 +164,7 @@ const Components = {
 
     Utils.updateCartBadge();
     Utils.initRipples();
+    // Reflect current auth state on freshly-mounted nav (login/account swap).
+    if (typeof Auth !== 'undefined' && Auth.syncUI) Auth.syncUI();
   }
 };

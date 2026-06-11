@@ -145,6 +145,12 @@ const Auth = {
             '<button type="button" class="btn btn-ghost btn-block" id="magicSignupBtn" style="margin-top:10px;">Verify with a magic link instead</button>' +
             '<p class="modal-hint">By signing up you agree to our terms of service.</p>' +
           '</form>' +
+          '<div class="modal-confirm" id="magicSentConfirm">' +
+            '<div class="modal-confirm-icon">✉️</div>' +
+            '<h3 class="modal-confirm-title">Check your email</h3>' +
+            '<p class="modal-confirm-text">We sent a secure login link to <strong id="magicSentEmail"></strong>. Open it on this device to finish signing in.</p>' +
+            '<button type="button" class="btn btn-primary btn-block btn-lg" id="magicConfirmOk">OK</button>' +
+          '</div>' +
         '</div>' +
       '</div>';
     document.body.insertAdjacentHTML('beforeend', html);
@@ -160,11 +166,14 @@ const Auth = {
     if (mlBtn) mlBtn.addEventListener('click', () => this.sendMagicLink('login'));
     const msBtn = document.getElementById('magicSignupBtn');
     if (msBtn) msBtn.addEventListener('click', () => this.sendMagicLink('signup'));
+    const okBtn = document.getElementById('magicConfirmOk');
+    if (okBtn) okBtn.addEventListener('click', () => this.hideMagicSent());
   },
 
   switchTab(name) {
     const modal = document.getElementById('loginModal');
     if (!modal) return;
+    this.hideMagicSent();
     modal.querySelectorAll('[data-auth-tab]').forEach(t => t.classList.toggle('active', t.dataset.authTab === name));
     modal.querySelectorAll('[data-auth-section]').forEach(s => s.classList.toggle('active', s.dataset.authSection === name));
     this.hideError();
@@ -192,6 +201,24 @@ const Auth = {
     modal.classList.remove('open');
     document.body.style.overflow = '';
     this.hideError();
+    this.hideMagicSent();
+  },
+
+  /* ---------- Magic-link sent confirmation (in-modal) ---------- */
+  showMagicSent(email) {
+    const modal = document.getElementById('loginModal');
+    if (!modal) return;
+    const card = modal.querySelector('.modal');
+    const em = modal.querySelector('#magicSentEmail');
+    if (em) em.textContent = email || '';
+    this.hideError();
+    if (card) card.classList.add('show-confirm');
+  },
+  hideMagicSent() {
+    const modal = document.getElementById('loginModal');
+    if (!modal) return;
+    const card = modal.querySelector('.modal');
+    if (card) card.classList.remove('show-confirm');
   },
 
   /* ---------- Login gating ---------- */
@@ -239,8 +266,7 @@ const Auth = {
       this._resetCaptcha(mode);
       if (error) { this.showError(error.message); return; }
       this.hideError();
-      this.close();
-      Utils.showToast('Check your inbox — we sent a verification link to ' + email, 'info', 6000);
+      this.showMagicSent(email);
     } catch (e) { this._resetCaptcha(mode); this.showError('Could not send the magic link. Please try again.'); }
   },
 
@@ -297,7 +323,7 @@ const Auth = {
       if (error) { this.showError(error.message); return; }
       if (data.user) { try { await SB.client.from('profiles').upsert({ id: data.user.id, full_name: name, email }); } catch (_) {} }
       if (data.session) { Utils.showToast('Welcome, ' + name + '!', 'success'); this.close(); }
-      else { this.close(); Utils.showToast('Account created — check your email to verify your address.', 'info', 6000); }
+      else { this.showMagicSent(email); }
       return;
     }
 
@@ -371,10 +397,16 @@ const Auth = {
         btn.classList.remove('logged-in');
       }
     });
+    // Mobile menu: swap the "Login / Sign Up" button for an account area.
+    document.querySelectorAll('[data-auth-mobile-login]').forEach(b => { b.style.display = this.isLoggedIn ? 'none' : ''; });
+    document.querySelectorAll('[data-auth-mobile-account]').forEach(a => { a.style.display = this.isLoggedIn ? '' : 'none'; });
+    document.querySelectorAll('[data-auth-mobile-name]').forEach(n => { n.textContent = this.isLoggedIn ? (this.userName || 'My Account') : ''; });
   },
 
   bindDelegation() {
     document.addEventListener('click', e => {
+      const logoutEl = e.target.closest('[data-auth-logout]');
+      if (logoutEl) { e.preventDefault(); this.logout(); return; }
       const opener = e.target.closest('[data-auth-open]');
       if (opener) { e.preventDefault(); this.open('login'); }
     });
