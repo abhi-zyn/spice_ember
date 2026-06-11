@@ -11,6 +11,7 @@ const Admin = {
     this.initDashboard();
     this.initBookings();
     this.initOrders();
+    this.initPayments();
     this.initMenuManage();
   },
 
@@ -66,7 +67,7 @@ const Admin = {
         <td>${Array.isArray(o.items) ? o.items.length + ' items' : '1 item'}</td>
         <td>${Utils.formatPrice(parseFloat(o.total) || 0)}</td>
         <td><span class="status-pill" style="--c:${Utils.getStatusColor(o.status)}">${o.status || 'pending'}</span></td>
-        <td>${Utils.formatDate(o.created_at)}</td>
+        <td>${Utils.formatDate(o.created_at)}<br><span class="td-sub">${Utils.formatTime(o.created_at)}</span></td>
       </tr>`).join('');
   },
 
@@ -89,7 +90,7 @@ const Admin = {
           <td>${Utils.formatDate(b.date)}</td>
           <td>${b.time}</td>
           <td>${b.guests}</td>
-          <td>${b.occasion || '\u2014'}</td>
+          <td>${b.occasion || '—'}</td>
           <td><span class="status-pill" style="--c:${Utils.getStatusColor(b.status)}">${b.status}</span></td>
           <td class="td-actions">
             <button class="mini-btn ok booking-action" data-id="${b.id}" data-action="confirm">Confirm</button>
@@ -118,14 +119,16 @@ const Admin = {
     if (!tb) return;
     try {
       const list = await API.getOrders(filter);
-      if (!list.length) { tb.innerHTML = `<tr><td colspan="6" class="td-empty">No orders found</td></tr>`; return; }
+      if (!list.length) { tb.innerHTML = `<tr><td colspan="8" class="td-empty">No orders found</td></tr>`; return; }
       tb.innerHTML = list.map(o => `
         <tr>
           <td>#${(o.id || '').toString().slice(-6)}</td>
-          <td>${o.customer_name || '\u2014'}</td>
-          <td>${Array.isArray(o.items) ? o.items.map(i => `${i.quantity}\u00d7 ${i.name}`).join(', ') : '\u2014'}</td>
+          <td>${o.customer_name || '—'}${o.order_type ? `<br><span class="td-sub">${o.order_type}</span>` : ''}</td>
+          <td>${Array.isArray(o.items) ? o.items.map(i => `${i.quantity}× ${i.name}`).join(', ') : '—'}</td>
           <td>${Utils.formatPrice(parseFloat(o.total) || 0)}</td>
           <td><span class="status-pill" style="--c:${Utils.getStatusColor(o.status)}">${o.status}</span></td>
+          <td>${Utils.formatDate(o.created_at)}<br><span class="td-sub">${Utils.formatTime(o.created_at)}</span></td>
+          <td>${o.delivered_at ? `${Utils.formatDate(o.delivered_at)}<br><span class="td-sub">${Utils.formatTime(o.delivered_at)}</span>` : '—'}</td>
           <td class="td-actions">
             <button class="mini-btn order-action" data-id="${o.id}" data-action="preparing">Prepare</button>
             <button class="mini-btn ok order-action" data-id="${o.id}" data-action="ready">Ready</button>
@@ -134,12 +137,59 @@ const Admin = {
           </td>
         </tr>`).join('');
       tb.querySelectorAll('.order-action').forEach(btn => btn.addEventListener('click', () => this.updateOrder(btn.dataset.id, btn.dataset.action)));
-    } catch (e) { tb.innerHTML = `<tr><td colspan="6" class="td-empty">Error loading orders</td></tr>`; }
+    } catch (e) { tb.innerHTML = `<tr><td colspan="8" class="td-empty">Error loading orders</td></tr>`; }
   },
   async updateOrder(id, status) {
     await API.updateOrderStatus(id, status);
     Utils.showToast(`Order set to ${status}`, 'success');
     this.renderOrders(document.getElementById('orderFilter')?.value || 'all');
+  },
+
+  /* ---------- Payments (secure super-admin view) ----------
+     Reads ALL payments via the admin-payments Edge Function using a
+     server-side dashboard key. The key is entered once per session and
+     stored only in sessionStorage. */
+  initPayments() {
+    const tb = document.getElementById('paymentsTable');
+    if (!tb) return;
+    const KEY = 'spice-ember-admin-pk';
+    const gate = document.getElementById('paymentsGate');
+    const unlock = document.getElementById('paymentsUnlock');
+    const keyInput = document.getElementById('paymentsKey');
+
+    const load = async (adminKey) => {
+      tb.innerHTML = `<tr><td colspan="8" class="td-empty">Loading…</td></tr>`;
+      try {
+        const list = await API.getAdminPayments(adminKey);
+        sessionStorage.setItem(KEY, adminKey);
+        if (gate) gate.style.display = 'none';
+        if (!list.length) { tb.innerHTML = `<tr><td colspan="8" class="td-empty">No payments recorded yet</td></tr>`; return; }
+        tb.innerHTML = list.map(p => `
+          <tr>
+            <td>${Utils.formatDate(p.created_at)}<br><span class="td-sub">${Utils.formatTime(p.created_at)}</span></td>
+            <td>${p.customer_name || '—'}<br><span class="td-sub">${p.customer_email || ''}</span></td>
+            <td>${p.customer_phone || '—'}</td>
+            <td>${Utils.formatPrice(parseFloat(p.amount) || 0)} ${p.currency || ''}</td>
+            <td><span class="status-pill" style="--c:${Utils.getStatusColor(p.status)}">${p.status || '—'}</span></td>
+            <td class="td-mono" title="${p.razorpay_order_id || ''}">${p.razorpay_order_id || '—'}</td>
+            <td class="td-mono" title="${p.razorpay_payment_id || ''}">${p.razorpay_payment_id || '—'}</td>
+            <td class="td-mono" title="${p.razorpay_signature || ''}">${p.razorpay_signature ? (p.razorpay_signature.slice(0, 14) + '…') : '—'}</td>
+          </tr>`).join('');
+      } catch (e) {
+        sessionStorage.removeItem(KEY);
+        if (gate) gate.style.display = '';
+        tb.innerHTML = `<tr><td colspan="8" class="td-empty">${e.message || 'Could not load payments'}</td></tr>`;
+      }
+    };
+
+    unlock?.addEventListener('click', () => {
+      const v = (keyInput && keyInput.value || '').trim();
+      if (v) load(v); else Utils.showToast('Enter the dashboard key', 'error');
+    });
+    keyInput?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); unlock?.click(); } });
+
+    const saved = sessionStorage.getItem(KEY);
+    if (saved) load(saved);
   },
 
   /* ---------- Menu management ---------- */
@@ -182,7 +232,7 @@ const Admin = {
         <img src="${item.image}" alt="${item.name}" loading="lazy">
         <div class="admin-menu-item-info">
           <h4>${item.name}</h4>
-          <span>${CATEGORY_LABELS[item.category] || item.category} \u00b7 ${Utils.formatPrice(item.price)}</span>
+          <span>${CATEGORY_LABELS[item.category] || item.category} · ${Utils.formatPrice(item.price)}</span>
         </div>
         <span class="tag ${item.type === 'veg' ? 'veg' : 'nonveg'}">${item.type}</span>
         ${isCustom ? `<button class="mini-btn danger del-item" data-id="${item.id}">Delete</button>` : ''}

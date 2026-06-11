@@ -3,18 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Orders — Spice &amp; Ember Admin</title>
+  <title>Payments — Spice &amp; Ember Admin</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
   <link rel="stylesheet" href="../css/style.css">
   <link rel="stylesheet" href="../css/admin.css">
+  <style>.td-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.8rem;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}</style>
 </head>
 <body class="admin-body">
   <aside class="admin-sidebar">
     <div class="admin-logo"><span class="flame-ico">🔥</span>Spice <span>&amp; Ember</span></div>
     <nav class="admin-nav">
       <a href="dashboard.html">📊 Dashboard</a>
-      <a href="orders.html" class="active">📦 Orders</a>
-      <a href="payments.html">💳 Payments</a>
+      <a href="orders.html">📦 Orders</a>
+      <a href="payments.html" class="active">💳 Payments</a>
       <a href="bookings.html">📅 Bookings</a>
       <a href="menu-manage.html">🍽️ Menu</a>
       <a href="../index.html">🌐 View Site</a>
@@ -24,26 +25,22 @@
   <div class="admin-overlay"></div>
   <main class="admin-main">
     <header class="admin-topbar">
-      <div style="display:flex;align-items:center;gap:14px"><button class="icon-btn admin-menu-toggle">☰</button><h1>Orders</h1></div>
+      <div style="display:flex;align-items:center;gap:14px"><button class="icon-btn admin-menu-toggle">☰</button><h1>Payments</h1></div>
       <div class="admin-topbar-actions"><button class="icon-btn theme-toggle"><span class="sun-icon">☀️</span><span class="moon-icon" style="display:none">🌙</span></button></div>
     </header>
     <div class="admin-content">
+      <div class="admin-panel" id="paymentsGate" style="max-width:440px;margin-bottom:24px">
+        <div class="admin-panel-head"><h2>🔒 Secure Payments</h2></div>
+        <p style="color:var(--text-muted);margin:6px 0 16px">Enter the payments dashboard key to view full, secured payment records (Razorpay order ID, payment ID, signature, amount and customer details). The key is verified on the server and never stored in the website code.</p>
+        <div class="form-group"><label for="paymentsKey">Dashboard Key</label><input id="paymentsKey" type="password" class="form-control" placeholder="••••••••••••" autocomplete="off"></div>
+        <button class="btn btn-primary" id="paymentsUnlock">Unlock Payments</button>
+      </div>
       <div class="admin-panel">
-        <div class="admin-panel-head">
-          <h2>All Orders</h2>
-          <select class="admin-filter" id="orderFilter">
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="preparing">Preparing</option>
-            <option value="ready">Ready</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
+        <div class="admin-panel-head"><h2>All Payments</h2></div>
         <div class="admin-table-wrap">
           <table class="admin-table">
-            <thead><tr><th>Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Status</th><th>Placed</th><th>Delivered</th><th>Actions</th></tr></thead>
-            <tbody id="ordersTable"></tbody>
+            <thead><tr><th>Date</th><th>Customer</th><th>Phone</th><th>Amount</th><th>Status</th><th>Razorpay Order ID</th><th>Payment ID</th><th>Signature</th></tr></thead>
+            <tbody id="paymentsTable"><tr><td colspan="8" class="td-empty">Unlock with your dashboard key to view payments.</td></tr></tbody>
           </table>
         </div>
       </div>
