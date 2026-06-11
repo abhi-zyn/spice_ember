@@ -27,6 +27,9 @@ const CONFIG = {
   supabaseUrl: 'https://rbwrvrwuxndzcstzurdk.supabase.co',
   supabaseAnonKey: 'sb_publishable_g5FYsXUwt1GTzSIq2_ZnZw_DgAEbkKt',
   googleAuthEnabled: true,
+  // Razorpay — paste your PUBLIC Key ID here (starts with rzp_test_ or rzp_live_).
+  // Leave blank ('') to use simulated payments. NEVER put your Key SECRET in client code.
+  razorpayKeyId: '',
   // Storage keys
   storageKey: 'spice-ember-cart',
   bookingsKey: 'spice-ember-bookings',

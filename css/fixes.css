@@ -1,0 +1,26 @@
+/* ============================================================
+   SPICE & EMBER — FIXES
+   Footer contact icon sizing + mobile brand alignment.
+   Loaded after style.css so these rules win.
+   ============================================================ */
+
+/* Footer contact icons (location / phone / email) were rendering
+   oversized because the inline SVGs had no width/height and no CSS
+   sizing rule. Constrain them to match the social icons. */
+.footer-contact li { align-items: flex-start; }
+.footer-contact svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--gold); margin-top: 3px; }
+.footer-contact li span { line-height: 1.5; }
+
+/* Keep the brand name on one line and properly aligned with the
+   action icons on tablet / mobile widths. */
+@media (max-width: 860px) {
+  .nav-logo { font-size: 1.34rem; white-space: nowrap; flex-shrink: 0; }
+  .nav-actions { gap: 8px; }
+}
+@media (max-width: 560px) {
+  .nav-logo { font-size: 1.12rem; gap: 6px; }
+  .nav-logo .flame-ico { font-size: 1.15rem; }
+  .nav-actions { gap: 6px; }
+  .icon-btn { width: 40px; height: 40px; }
+  .icon-btn svg { width: 18px; height: 18px; }
+}

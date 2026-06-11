@@ -186,12 +186,60 @@ const API = {
   }
 };
 
-/* ---------------- PAYMENT (mock gateway) ---------------- */
+/* ---------------- PAYMENT (Razorpay) ----------------
+   Opens the real Razorpay Checkout when a Key ID + SDK are available.
+   Falls back to a simulated success so the site still works offline
+   or before you add your Razorpay Key ID in js/config.js.
+
+   IMPORTANT: This is a client-only integration (no order_id). For a
+   production live setup you should also verify the payment signature
+   on a server (e.g. a Supabase Edge Function) using your Razorpay Key
+   SECRET. Never put the Key Secret in this client code.
+   ---------------------------------------------------- */
 const RazorpayPayment = {
-  async initiatePayment(amount, info = {}) {
-    // Mock gateway — swap for the real Razorpay checkout in production.
-    return new Promise(resolve => {
-      setTimeout(() => resolve({ success: true, payment_id: 'pay_' + Utils.generateId() }), 900);
+  initiatePayment(orderDetails = {}) {
+    const amount = Number((orderDetails && (orderDetails.total ?? orderDetails.amount)) || 0);
+    const keyId = (typeof CONFIG !== 'undefined' && CONFIG.razorpayKeyId) ? CONFIG.razorpayKeyId : '';
+
+    // Fallback — no key configured or SDK not loaded: simulate a payment.
+    if (!keyId || typeof window === 'undefined' || typeof window.Razorpay === 'undefined') {
+      console.info('[Razorpay] No Key ID configured or SDK missing — using a simulated payment.');
+      return new Promise(resolve => {
+        setTimeout(() => resolve({ success: true, simulated: true, payment_id: 'pay_sim_' + Utils.generateId() }), 900);
+      });
+    }
+
+    // Real Razorpay Checkout (client-only flow).
+    return new Promise((resolve, reject) => {
+      const options = {
+        key: keyId,
+        amount: Math.round(amount * 100), // amount in the smallest currency unit (paise)
+        currency: 'INR',
+        name: CONFIG.appName || 'Spice & Ember',
+        description: 'Food order payment',
+        prefill: {
+          name: orderDetails.customer_name || orderDetails.name || '',
+          email: orderDetails.customer_email || orderDetails.email || '',
+          contact: orderDetails.customer_phone || orderDetails.phone || ''
+        },
+        notes: { address: orderDetails.delivery_address || orderDetails.address || '' },
+        theme: { color: '#ff5722' },
+        handler(response) {
+          resolve({ success: true, payment_id: response.razorpay_payment_id, raw: response });
+        },
+        modal: {
+          ondismiss() { reject(new Error('Payment cancelled.')); }
+        }
+      };
+      try {
+        const rzp = new window.Razorpay(options);
+        rzp.on('payment.failed', resp => {
+          reject(new Error((resp && resp.error && resp.error.description) || 'Payment failed. Please try again.'));
+        });
+        rzp.open();
+      } catch (e) {
+        reject(new Error('Could not open Razorpay Checkout.'));
+      }
     });
   }
 };
