@@ -9,6 +9,16 @@ const Components = {
   // Path prefix so the same markup works at root and in /admin
   base() { return window.location.pathname.includes('/admin/') ? '../' : ''; },
 
+  // Ensure the post-style.css fixes sheet is loaded on every page.
+  ensureStyles() {
+    if (document.querySelector('link[data-spice-fixes]')) return;
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = this.base() + 'css/fixes.css';
+    link.setAttribute('data-spice-fixes', '');
+    document.head.appendChild(link);
+  },
+
   icon(name) {
     const i = {
       cart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
@@ -118,6 +128,7 @@ const Components = {
   },
 
   mount(active) {
+    this.ensureStyles();
     const navMount = document.getElementById('nav-mount');
     const footMount = document.getElementById('footer-mount');
     if (navMount) navMount.innerHTML = this.renderNavbar(active);
