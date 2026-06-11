@@ -21,10 +21,12 @@ create table if not exists public.payments (
 alter table public.payments enable row level security;
 
 -- Logged-in users can read only their own payments.
+-- Note: auth.uid() must be cast to uuid to match the uuid user_id column,
+-- otherwise Postgres raises: operator does not exist: uuid = text
 drop policy if exists "payments_select_own" on public.payments;
 create policy "payments_select_own" on public.payments
   for select to authenticated
-  using (auth.uid() = user_id);
+  using ((select auth.uid())::uuid = user_id);
 
 -- Inserts are performed only by the verify-payment Edge Function using the
 -- service-role key, which bypasses RLS. No client INSERT policy is granted,
