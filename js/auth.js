@@ -1,7 +1,8 @@
 /* ============================================================
    SPICE & EMBER — AUTH + LOGIN POPUP
    Supabase Auth (email/password + Google + magic link) with an
-   automatic localStorage fallback, login gating, and account menu.
+   automatic localStorage fallback, login gating, account menu,
+   and optional Cloudflare Turnstile captcha.
    ============================================================ */
 const Auth = {
   isLoggedIn: false,
@@ -10,10 +11,12 @@ const Auth = {
   userId: null,
   isAdmin: false,
   _profile: null,
+  _captcha: { login: null, signup: null },
 
   async init() {
     this.injectModal();
     this.bindDelegation();
+    this._initCaptcha();
     this.isAdmin = localStorage.getItem(CONFIG.adminKey) === 'true';
     if (typeof SB !== 'undefined' && SB.enabled) {
       try {
@@ -54,6 +57,60 @@ const Auth = {
   getUsers() { return Utils.getFromStorage('spice-ember-users') || []; },
   saveUsers(u) { Utils.saveToStorage('spice-ember-users', u); },
 
+  /* ---------- Cloudflare Turnstile captcha ---------- */
+  _captchaKey() {
+    return (typeof CONFIG !== 'undefined' && CONFIG.turnstileSiteKey) ? CONFIG.turnstileSiteKey : '';
+  },
+  _initCaptcha() {
+    const siteKey = this._captchaKey();
+    if (!siteKey) return; // captcha disabled until a site key is set in config.js
+    const render = () => {
+      if (!(window.turnstile && window.turnstile.render)) return;
+      const loginEl = document.getElementById('loginCaptcha');
+      const signupEl = document.getElementById('signupCaptcha');
+      if (loginEl && this._captcha.login === null) {
+        this._captcha.login = window.turnstile.render(loginEl, { sitekey: siteKey, theme: 'auto' });
+      }
+      if (signupEl && this._captcha.signup === null) {
+        this._captcha.signup = window.turnstile.render(signupEl, { sitekey: siteKey, theme: 'auto' });
+      }
+    };
+    if (window.turnstile && window.turnstile.render) { render(); return; }
+    if (!document.getElementById('cf-turnstile-script')) {
+      const s = document.createElement('script');
+      s.id = 'cf-turnstile-script';
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+      s.async = true; s.defer = true;
+      document.head.appendChild(s);
+    }
+    let tries = 0;
+    const t = setInterval(() => {
+      tries++;
+      if (window.turnstile && window.turnstile.render) { clearInterval(t); render(); }
+      else if (tries > 50) clearInterval(t);
+    }, 150);
+  },
+  _getCaptchaToken(mode) {
+    try {
+      const id = this._captcha[mode];
+      if (window.turnstile && id !== null && id !== undefined) return window.turnstile.getResponse(id) || '';
+    } catch (_) {}
+    return '';
+  },
+  _resetCaptcha(mode) {
+    try {
+      const id = this._captcha[mode];
+      if (window.turnstile && id !== null && id !== undefined) window.turnstile.reset(id);
+    } catch (_) {}
+  },
+  // Returns { ok, token }. When captcha is disabled, ok:true and token:undefined.
+  _requireCaptcha(mode) {
+    if (!this._captchaKey()) return { ok: true, token: undefined };
+    const token = this._getCaptchaToken(mode);
+    if (!token) { this.showError('Please complete the captcha verification.'); return { ok: false }; }
+    return { ok: true, token };
+  },
+
   /* ---------- Modal markup ---------- */
   injectModal() {
     if (document.getElementById('loginModal')) return;
@@ -74,6 +131,7 @@ const Auth = {
           '<form class="modal-form-section active" id="loginForm" data-auth-section="login">' +
             '<div class="form-group"><label for="loginEmail">Email</label><input type="email" id="loginEmail" class="form-control" placeholder="you@email.com" required autocomplete="email"></div>' +
             '<div class="form-group"><label for="loginPassword">Password</label><input type="password" id="loginPassword" class="form-control" placeholder="Your password" required autocomplete="current-password"></div>' +
+            '<div id="loginCaptcha" class="cf-turnstile" style="margin:4px 0 12px;"></div>' +
             '<button type="submit" class="btn btn-primary btn-block btn-lg">Sign In</button>' +
             '<button type="button" class="btn btn-ghost btn-block" id="magicLoginBtn" style="margin-top:10px;">Email me a login link</button>' +
             '<p class="modal-hint">Admin? Use <strong>admin</strong> / <strong>admin123</strong></p>' +
@@ -82,6 +140,7 @@ const Auth = {
             '<div class="form-group"><label for="signupName">Full Name</label><input type="text" id="signupName" class="form-control" placeholder="Your name" required autocomplete="name"></div>' +
             '<div class="form-group"><label for="signupEmail">Email</label><input type="email" id="signupEmail" class="form-control" placeholder="you@email.com" required autocomplete="email"></div>' +
             '<div class="form-group"><label for="signupPassword">Password</label><input type="password" id="signupPassword" class="form-control" placeholder="Create a password" required minlength="6" autocomplete="new-password"></div>' +
+            '<div id="signupCaptcha" class="cf-turnstile" style="margin:4px 0 12px;"></div>' +
             '<button type="submit" class="btn btn-gold btn-block btn-lg">Create Account</button>' +
             '<button type="button" class="btn btn-ghost btn-block" id="magicSignupBtn" style="margin-top:10px;">Verify with a magic link instead</button>' +
             '<p class="modal-hint">By signing up you agree to our terms of service.</p>' +
@@ -109,6 +168,7 @@ const Auth = {
     modal.querySelectorAll('[data-auth-tab]').forEach(t => t.classList.toggle('active', t.dataset.authTab === name));
     modal.querySelectorAll('[data-auth-section]').forEach(s => s.classList.toggle('active', s.dataset.authSection === name));
     this.hideError();
+    this._initCaptcha();
     const sub = modal.querySelector('.modal-sub');
     if (sub) sub.textContent = name === 'login' ? 'Welcome back to the fire' : 'Join the Spice & Ember family';
   },
@@ -165,19 +225,23 @@ const Auth = {
     const emailEl = document.getElementById(mode === 'signup' ? 'signupEmail' : 'loginEmail');
     const email = (emailEl && emailEl.value.trim()) || '';
     if (!email) { this.showError('Enter your email address first.'); return; }
+    const cap = this._requireCaptcha(mode);
+    if (!cap.ok) return;
     const name = mode === 'signup' ? (document.getElementById('signupName').value.trim() || '') : '';
     const options = {
       shouldCreateUser: true,
       emailRedirectTo: window.location.origin + window.location.pathname
     };
     if (name) options.data = { full_name: name };
+    if (cap.token !== undefined) options.captchaToken = cap.token;
     try {
       const { error } = await SB.client.auth.signInWithOtp({ email, options });
+      this._resetCaptcha(mode);
       if (error) { this.showError(error.message); return; }
       this.hideError();
       this.close();
       Utils.showToast('Check your inbox — we sent a verification link to ' + email, 'info', 6000);
-    } catch (e) { this.showError('Could not send the magic link. Please try again.'); }
+    } catch (e) { this._resetCaptcha(mode); this.showError('Could not send the magic link. Please try again.'); }
   },
 
   /* ---------- Email / password ---------- */
@@ -196,7 +260,12 @@ const Auth = {
     }
 
     if (typeof SB !== 'undefined' && SB.enabled) {
-      const { error } = await SB.client.auth.signInWithPassword({ email, password });
+      const cap = this._requireCaptcha('login');
+      if (!cap.ok) return;
+      const options = {};
+      if (cap.token !== undefined) options.captchaToken = cap.token;
+      const { error } = await SB.client.auth.signInWithPassword({ email, password, options });
+      this._resetCaptcha('login');
       if (error) { this.showError(error.message || 'Invalid email or password.'); return; }
       this._profile = null;
       Utils.showToast('Welcome back!', 'success');
@@ -219,7 +288,12 @@ const Auth = {
     if (password.length < 6) { this.showError('Password must be at least 6 characters.'); return; }
 
     if (typeof SB !== 'undefined' && SB.enabled) {
-      const { data, error } = await SB.client.auth.signUp({ email, password, options: { data: { full_name: name }, emailRedirectTo: window.location.origin + window.location.pathname } });
+      const cap = this._requireCaptcha('signup');
+      if (!cap.ok) return;
+      const options = { data: { full_name: name }, emailRedirectTo: window.location.origin + window.location.pathname };
+      if (cap.token !== undefined) options.captchaToken = cap.token;
+      const { data, error } = await SB.client.auth.signUp({ email, password, options });
+      this._resetCaptcha('signup');
       if (error) { this.showError(error.message); return; }
       if (data.user) { try { await SB.client.from('profiles').upsert({ id: data.user.id, full_name: name, email }); } catch (_) {} }
       if (data.session) { Utils.showToast('Welcome, ' + name + '!', 'success'); this.close(); }
