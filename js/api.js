@@ -71,14 +71,17 @@ const API = {
     return uid ? list.filter(o => !o.user_id || o.user_id === uid) : list;
   },
   async updateOrderStatus(id, status) {
+    const patch = { status };
+    // Stamp the delivery time when an order is marked delivered.
+    if (status === 'delivered') patch.delivered_at = new Date().toISOString();
     if (this._enabled()) {
-      const { error } = await SB.client.from('orders').update({ status }).eq('id', id);
+      const { error } = await SB.client.from('orders').update(patch).eq('id', id);
       if (error) throw new Error(error.message);
       return true;
     }
     const orders = Utils.getOrders();
     const o = orders.find(x => String(x.id) === String(id));
-    if (o) { o.status = status; Utils.saveOrders(orders); }
+    if (o) { o.status = status; if (status === 'delivered') o.delivered_at = new Date().toISOString(); Utils.saveOrders(orders); }
     return true;
   },
 
@@ -90,6 +93,26 @@ const API = {
       return data || [];
     }
     return Utils.getFromStorage('spice-ember-payments') || [];
+  },
+  // Secure admin view: fetches ALL payments via the admin-payments Edge
+  // Function using a server-side dashboard key (never stored in the client).
+  async getAdminPayments(adminKey) {
+    let base = (typeof CONFIG !== 'undefined' && CONFIG.supabaseUrl) ? CONFIG.supabaseUrl : '';
+    if (base.endsWith('/')) base = base.slice(0, -1);
+    if (!base) throw new Error('Supabase is not configured.');
+    const res = await fetch(base + '/functions/v1/admin-payments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': (CONFIG.supabaseAnonKey || ''),
+        'Authorization': 'Bearer ' + (CONFIG.supabaseAnonKey || ''),
+        'x-admin-key': adminKey || ''
+      },
+      body: '{}'
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || 'Could not load payments.');
+    return json.payments || [];
   },
 
   /* ---------------- BOOKINGS ---------------- */
@@ -288,7 +311,7 @@ const RazorpayPayment = {
             email: orderDetails.customer_email || orderDetails.email || '',
             contact: orderDetails.customer_phone || orderDetails.phone || ''
           },
-          notes: { address: orderDetails.delivery_address || orderDetails.address || '' },
+          notes: { order_type: orderDetails.order_type || '' },
           theme: { color: '#ff5722' }
         });
 
@@ -323,7 +346,7 @@ const RazorpayPayment = {
           email: orderDetails.customer_email || orderDetails.email || '',
           contact: orderDetails.customer_phone || orderDetails.phone || ''
         },
-        notes: { address: orderDetails.delivery_address || orderDetails.address || '' },
+        notes: { order_type: orderDetails.order_type || '' },
         theme: { color: '#ff5722' }
       });
       return { success: true, verified: false, payment_id: response.razorpay_payment_id, raw: response };

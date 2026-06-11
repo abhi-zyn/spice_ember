@@ -16,6 +16,7 @@ alter table public.orders add column if not exists customer_name    text;
 alter table public.orders add column if not exists customer_email   text;
 alter table public.orders add column if not exists customer_phone   text;
 alter table public.orders add column if not exists delivery_address text;
+alter table public.orders add column if not exists order_type       text;
 alter table public.orders add column if not exists notes            text;
 alter table public.orders add column if not exists items            jsonb;
 alter table public.orders add column if not exists subtotal         numeric;
@@ -27,6 +28,7 @@ alter table public.orders add column if not exists payment_id       text;
 alter table public.orders add column if not exists payment_method   text;
 alter table public.orders add column if not exists status           text default 'pending';
 alter table public.orders add column if not exists created_at       timestamptz not null default now();
+alter table public.orders add column if not exists delivered_at     timestamptz;
 
 -- Money columns must be numeric, not integer (decimals like 83.1276).
 alter table public.orders alter column subtotal     type numeric using subtotal::numeric;
