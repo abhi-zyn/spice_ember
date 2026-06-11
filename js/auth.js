@@ -1,7 +1,7 @@
 /* ============================================================
    SPICE & EMBER — AUTH + LOGIN POPUP
-   Supabase Auth (email/password + Google) with an automatic
-   localStorage fallback, login gating, and account menu.
+   Supabase Auth (email/password + Google + magic link) with an
+   automatic localStorage fallback, login gating, and account menu.
    ============================================================ */
 const Auth = {
   isLoggedIn: false,
@@ -75,6 +75,7 @@ const Auth = {
             '<div class="form-group"><label for="loginEmail">Email</label><input type="email" id="loginEmail" class="form-control" placeholder="you@email.com" required autocomplete="email"></div>' +
             '<div class="form-group"><label for="loginPassword">Password</label><input type="password" id="loginPassword" class="form-control" placeholder="Your password" required autocomplete="current-password"></div>' +
             '<button type="submit" class="btn btn-primary btn-block btn-lg">Sign In</button>' +
+            '<button type="button" class="btn btn-ghost btn-block" id="magicLoginBtn" style="margin-top:10px;">Email me a login link</button>' +
             '<p class="modal-hint">Admin? Use <strong>admin</strong> / <strong>admin123</strong></p>' +
           '</form>' +
           '<form class="modal-form-section" id="signupForm" data-auth-section="signup">' +
@@ -82,6 +83,7 @@ const Auth = {
             '<div class="form-group"><label for="signupEmail">Email</label><input type="email" id="signupEmail" class="form-control" placeholder="you@email.com" required autocomplete="email"></div>' +
             '<div class="form-group"><label for="signupPassword">Password</label><input type="password" id="signupPassword" class="form-control" placeholder="Create a password" required minlength="6" autocomplete="new-password"></div>' +
             '<button type="submit" class="btn btn-gold btn-block btn-lg">Create Account</button>' +
+            '<button type="button" class="btn btn-ghost btn-block" id="magicSignupBtn" style="margin-top:10px;">Verify with a magic link instead</button>' +
             '<p class="modal-hint">By signing up you agree to our terms of service.</p>' +
           '</form>' +
         '</div>' +
@@ -95,6 +97,10 @@ const Auth = {
     document.getElementById('loginForm').addEventListener('submit', e => this.handleLogin(e));
     document.getElementById('signupForm').addEventListener('submit', e => this.handleSignup(e));
     document.getElementById('googleLoginBtn').addEventListener('click', () => this.loginWithGoogle());
+    const mlBtn = document.getElementById('magicLoginBtn');
+    if (mlBtn) mlBtn.addEventListener('click', () => this.sendMagicLink('login'));
+    const msBtn = document.getElementById('magicSignupBtn');
+    if (msBtn) msBtn.addEventListener('click', () => this.sendMagicLink('signup'));
   },
 
   switchTab(name) {
@@ -150,6 +156,30 @@ const Auth = {
     } catch (e) { this.showError('Could not start Google sign-in.'); }
   },
 
+  /* ---------- Magic link (passwordless email verification) ---------- */
+  async sendMagicLink(mode = 'login') {
+    if (!(typeof SB !== 'undefined' && SB.enabled)) {
+      Utils.showToast('Magic links need Supabase configured — see SETUP_PAYMENTS.md.', 'error', 4500);
+      return;
+    }
+    const emailEl = document.getElementById(mode === 'signup' ? 'signupEmail' : 'loginEmail');
+    const email = (emailEl && emailEl.value.trim()) || '';
+    if (!email) { this.showError('Enter your email address first.'); return; }
+    const name = mode === 'signup' ? (document.getElementById('signupName').value.trim() || '') : '';
+    const options = {
+      shouldCreateUser: true,
+      emailRedirectTo: window.location.origin + window.location.pathname
+    };
+    if (name) options.data = { full_name: name };
+    try {
+      const { error } = await SB.client.auth.signInWithOtp({ email, options });
+      if (error) { this.showError(error.message); return; }
+      this.hideError();
+      this.close();
+      Utils.showToast('Check your inbox — we sent a verification link to ' + email, 'info', 6000);
+    } catch (e) { this.showError('Could not send the magic link. Please try again.'); }
+  },
+
   /* ---------- Email / password ---------- */
   async handleLogin(e) {
     e.preventDefault();
@@ -189,11 +219,11 @@ const Auth = {
     if (password.length < 6) { this.showError('Password must be at least 6 characters.'); return; }
 
     if (typeof SB !== 'undefined' && SB.enabled) {
-      const { data, error } = await SB.client.auth.signUp({ email, password, options: { data: { full_name: name } } });
+      const { data, error } = await SB.client.auth.signUp({ email, password, options: { data: { full_name: name }, emailRedirectTo: window.location.origin + window.location.pathname } });
       if (error) { this.showError(error.message); return; }
       if (data.user) { try { await SB.client.from('profiles').upsert({ id: data.user.id, full_name: name, email }); } catch (_) {} }
       if (data.session) { Utils.showToast('Welcome, ' + name + '!', 'success'); this.close(); }
-      else { this.close(); Utils.showToast('Account created — check your email to confirm.', 'info', 5000); }
+      else { this.close(); Utils.showToast('Account created — check your email to verify your address.', 'info', 6000); }
       return;
     }
 
