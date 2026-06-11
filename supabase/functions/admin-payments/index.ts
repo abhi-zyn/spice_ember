@@ -1,16 +1,20 @@
 // Spice & Ember — admin-payments Edge Function
 // Returns ALL payment records for the admin dashboard, secured by a
-// server-side dashboard key. Deploy with Verify JWT = OFF (or --no-verify-jwt).
+// dashboard key that is stored ENCRYPTED (bcrypt hash) in the database.
+// Deploy with Verify JWT = OFF (or --no-verify-jwt).
 //
-//   supabase secrets set ADMIN_DASHBOARD_KEY=your-long-random-key
 //   supabase functions deploy admin-payments --no-verify-jwt
 //
-// The browser sends the key in the `x-admin-key` header. The SERVICE ROLE key
-// is used to bypass RLS and read every payment row; it never reaches the client.
+// Set / rotate the key by running supabase/admin-key.sql (stores only a
+// bcrypt hash — the plain text key is never saved anywhere).
+//
+// The browser sends the typed key in the `x-admin-key` header. The key is
+// verified against the stored hash via the verify_admin_key() SQL function.
+// The SERVICE ROLE key is used to bypass RLS and read payments; it never
+// reaches the client.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const ADMIN_KEY = Deno.env.get('ADMIN_DASHBOARD_KEY') || ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 
@@ -30,11 +34,16 @@ function json(body: unknown, status = 200) {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   try {
-    if (!ADMIN_KEY) return json({ error: 'Server not configured: set ADMIN_DASHBOARD_KEY.' }, 500)
     const key = req.headers.get('x-admin-key') || ''
-    if (key !== ADMIN_KEY) return json({ error: 'Unauthorized — invalid dashboard key.' }, 401)
+    if (!key) return json({ error: 'Unauthorized — dashboard key required.' }, 401)
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE)
+
+    // Verify the typed key against the encrypted (bcrypt) hash in the DB.
+    const { data: ok, error: vErr } = await supabase.rpc('verify_admin_key', { input_key: key })
+    if (vErr) return json({ error: 'Key verification failed: ' + vErr.message }, 500)
+    if (!ok) return json({ error: 'Unauthorized — invalid dashboard key.' }, 401)
+
     const { data, error } = await supabase
       .from('payments')
       .select('*')
