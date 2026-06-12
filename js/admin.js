@@ -9,6 +9,7 @@ const Admin = {
     this.bindShell();
     this.checkAuth();
     this.initDashboard();
+    this.initQrGenerator();
     this.initBookings();
     this.initOrders();
     this.initPayments();
@@ -66,6 +67,68 @@ const Admin = {
         <td><span class="status-pill" style="--c:${Utils.getStatusColor(o.status)}">${o.status || 'pending'}</span></td>
         <td>${Utils.formatDate(o.created_at)}<br><span class="td-sub">${Utils.formatTime(o.created_at)}</span></td>
       </tr>`).join('');
+  },
+
+  /* ---------- Payment QR generator (any admin) ----------
+     Generates a custom-price UPI QR via the create-qr Edge Function and polls
+     qr_payments for the webhook-confirmed 'paid' status. */
+  initQrGenerator() {
+    const wrap = document.getElementById('qrGen');
+    if (!wrap) return;
+    const amountEl = document.getElementById('qrAmount');
+    const noteEl = document.getElementById('qrNote');
+    const genBtn = document.getElementById('qrGenerateBtn');
+    const result = document.getElementById('qrResult');
+    const img = document.getElementById('qrImage');
+    const amtLabel = document.getElementById('qrAmountLabel');
+    const statusEl = document.getElementById('qrStatus');
+    const resetBtn = document.getElementById('qrResetBtn');
+    let pollTimer = null;
+
+    const stopPoll = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
+
+    const reset = () => {
+      stopPoll();
+      if (result) result.style.display = 'none';
+      if (amountEl) amountEl.value = '';
+      if (noteEl) noteEl.value = '';
+      if (genBtn) { genBtn.disabled = false; genBtn.textContent = 'Generate QR'; }
+    };
+
+    resetBtn?.addEventListener('click', reset);
+
+    genBtn?.addEventListener('click', async () => {
+      const amount = parseFloat(amountEl?.value);
+      if (!amount || amount < 1) { Utils.showToast('Enter a valid amount', 'error'); return; }
+      genBtn.disabled = true;
+      genBtn.textContent = 'Generating…';
+      try {
+        const qr = await API.createQr(amount, (noteEl?.value || '').trim());
+        if (img) img.src = qr.image_url;
+        if (amtLabel) amtLabel.textContent = Utils.formatPrice(amount);
+        if (statusEl) { statusEl.textContent = 'Waiting for payment…'; statusEl.style.color = '#fbbf24'; }
+        if (result) result.style.display = '';
+        genBtn.textContent = 'Generate QR';
+        stopPoll();
+        pollTimer = setInterval(async () => {
+          try {
+            const row = await API.getQrStatus(qr.id);
+            if (row && row.status === 'paid') {
+              stopPoll();
+              if (statusEl) {
+                statusEl.textContent = '✓ Payment received — ' + Utils.formatPrice(row.amount || amount);
+                statusEl.style.color = '#34d399';
+              }
+              Utils.showToast('Payment received!', 'success');
+            }
+          } catch (_) { /* keep polling */ }
+        }, 4000);
+      } catch (e) {
+        genBtn.disabled = false;
+        genBtn.textContent = 'Generate QR';
+        Utils.showToast(e.message || 'Could not generate QR', 'error');
+      }
+    });
   },
 
   /* ---------- Bookings ---------- */

@@ -7,6 +7,17 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
   <link rel="stylesheet" href="../css/style.css">
   <link rel="stylesheet" href="../css/admin.css">
+  <style>
+    .qr-help{color:#8c8175;margin:0 0 16px;font-size:.92rem}
+    .qr-gen{display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start}
+    .qr-gen-form{display:flex;flex-direction:column;gap:12px;min-width:240px;flex:1;max-width:340px}
+    .qr-input{padding:12px 14px;border-radius:10px;border:1px solid rgba(140,129,117,.35);background:transparent;color:inherit;font-size:1rem}
+    .qr-result{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center}
+    .qr-img-box{background:#fff;padding:14px;border-radius:14px;width:220px;height:220px;display:flex;align-items:center;justify-content:center}
+    .qr-img-box img{max-width:100%;max-height:100%}
+    .qr-amount-lbl{font-size:1.4rem;font-weight:700}
+    .qr-status-lbl{font-weight:600;color:#fbbf24}
+  </style>
 </head>
 <body class="admin-body">
   <aside class="admin-sidebar">
@@ -38,6 +49,23 @@
         <div class="admin-card"><div class="admin-card-ico">📦</div><div class="admin-card-val" id="totalOrders">0</div><div class="admin-card-lbl">Total Orders</div></div>
         <div class="admin-card"><div class="admin-card-ico">📅</div><div class="admin-card-val" id="activeBookings">0</div><div class="admin-card-lbl">Active Bookings</div></div>
         <div class="admin-card"><div class="admin-card-ico">👥</div><div class="admin-card-val" id="totalGuests">0</div><div class="admin-card-lbl">Total Guests</div></div>
+      </div>
+      <div class="admin-panel">
+        <div class="admin-panel-head"><h2>Generate Payment QR</h2></div>
+        <p class="qr-help">Enter a custom amount, generate a UPI QR, and show it to the customer to scan. The payment is auto-verified here the moment it is received.</p>
+        <div class="qr-gen" id="qrGen">
+          <div class="qr-gen-form">
+            <input type="number" id="qrAmount" class="qr-input" placeholder="Amount (₹)" min="1" step="1">
+            <input type="text" id="qrNote" class="qr-input" placeholder="Note (optional)">
+            <button class="btn btn-primary" id="qrGenerateBtn">Generate QR</button>
+          </div>
+          <div class="qr-result" id="qrResult" style="display:none">
+            <div class="qr-img-box"><img id="qrImage" alt="Scan to pay"></div>
+            <div class="qr-amount-lbl" id="qrAmountLabel"></div>
+            <div class="qr-status-lbl" id="qrStatus">Waiting for payment…</div>
+            <button class="btn btn-ghost" id="qrResetBtn">New QR</button>
+          </div>
+        </div>
       </div>
       <div class="admin-panel">
         <div class="admin-panel-head"><h2>Recent Orders</h2><a href="orders.html" class="btn btn-ghost">View All</a></div>

@@ -199,6 +199,39 @@ const API = {
     return true;
   },
 
+  /* ---------------- PAYMENT QR (admin) ----------------
+     Generate a custom-price single-use UPI QR via the create-qr Edge
+     Function, then poll qr_payments for the webhook-confirmed result. */
+  _fnBase() {
+    return (typeof CONFIG !== 'undefined' && CONFIG.supabaseUrl)
+      ? CONFIG.supabaseUrl.replace(/\/$/, '') + '/functions/v1'
+      : '';
+  },
+  async createQr(amount, description) {
+    const base = this._fnBase();
+    if (!base) throw new Error('Supabase is not configured.');
+    const res = await fetch(base + '/create-qr', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': CONFIG.supabaseAnonKey,
+        'Authorization': 'Bearer ' + CONFIG.supabaseAnonKey
+      },
+      body: JSON.stringify({ amount, description: description || '' })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not generate the QR code.');
+    return data;
+  },
+  async getQrStatus(id) {
+    if (this._enabled()) {
+      const { data, error } = await SB.client.from('qr_payments').select('*').eq('id', id).maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    return null;
+  },
+
   /* ---------------- DASHBOARD ---------------- */
   async getDashboardStats() {
     const [orders, bookings] = await Promise.all([this.getOrders('all'), this.getBookings('all')]);
