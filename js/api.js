@@ -127,6 +127,18 @@ const API = {
     }
     return filter && filter !== 'all' ? list.filter(b => b.status === filter) : list;
   },
+  async getMyBookings() {
+    const uid = this._uid();
+    if (this._enabled()) {
+      let q = SB.client.from('bookings').select('*').order('created_at', { ascending: false });
+      if (uid) q = q.eq('user_id', uid);
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      return data || [];
+    }
+    const list = Utils.getBookings();
+    return uid ? list.filter(b => !b.user_id || b.user_id === uid) : list;
+  },
   async updateBookingStatus(id, action) {
     const map = { confirm: 'confirmed', complete: 'completed', cancel: 'cancelled' };
     const status = map[action] || action;

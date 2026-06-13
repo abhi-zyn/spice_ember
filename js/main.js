@@ -12,6 +12,7 @@ const App = {
     this.renderCategoryPills();
     this.renderMenuGrid();
     this.renderMyOrders();
+    this.renderMyBookings();
     this.initSearch();
     this.initSort();
     this.initBookingForm();
@@ -177,6 +178,7 @@ const App = {
         const success = document.getElementById('bookingSuccess');
         if (success) { success.style.display = 'block'; success.scrollIntoView({ behavior: 'smooth' }); }
         Utils.showToast('Table reserved! We’ll confirm shortly.', 'success');
+        this.renderMyBookings();
       } catch { Utils.showToast('Could not reserve. Try again.', 'error'); }
       finally { btn.disabled = false; btn.textContent = 'Reserve Table'; }
     });
@@ -263,6 +265,43 @@ const App = {
         '<div class="order-card-foot"><span style="color:var(--text-muted);font-size:.85rem">' +
         (o.order_type ? o.order_type : '') + '</span><strong>' +
         Utils.formatPrice(parseFloat(o.total) || 0) + '</strong></div>' +
+      '</div>';
+    }).join('');
+  },
+
+  /* ---------- My Table Reservations ---------- */
+  async renderMyBookings() {
+    const c = document.getElementById('myBookingsList');
+    if (!c) return;
+    if (typeof Auth !== 'undefined' && !Auth.isLoggedIn) {
+      c.innerHTML = '<div class="empty-state"><div class="ico">🔒</div><h3>Please log in</h3><p>Log in to view your table reservations.</p><button class="btn btn-primary" data-auth-open style="margin-top:18px">Log In</button></div>';
+      return;
+    }
+    let bookings = [];
+    try { bookings = await API.getMyBookings(); } catch (e) { bookings = []; }
+    if (!bookings.length) {
+      c.innerHTML = '<div class="empty-state"><div class="ico">📅</div><h3>No reservations yet</h3><p>When you book a table it will appear here.</p><a href="book-table.html" class="btn btn-primary" style="margin-top:18px">Book a Table</a></div>';
+      return;
+    }
+    const labels = { pending: 'Pending confirmation', confirmed: 'Confirmed', completed: 'Completed', cancelled: 'Cancelled' };
+    c.innerHTML = bookings.map(b => {
+      const status = (b.status || 'pending').toLowerCase();
+      const color = Utils.getStatusColor ? Utils.getStatusColor(status) : '#888';
+      let dateStr = b.date || '';
+      try { if (b.date) dateStr = new Date(b.date + 'T00:00:00').toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }); } catch (_) {}
+      const guests = parseInt(b.guests, 10) || 1;
+      const meta = (b.time ? '🕐 ' + b.time + ' · ' : '') + guests + ' guest' + (guests > 1 ? 's' : '') + (b.occasion ? ' · ' + b.occasion : '');
+      let note;
+      if (status === 'cancelled') note = '<div class="track-cancelled">✕ This reservation was cancelled.</div>';
+      else if (status === 'confirmed') note = '<div style="color:#34d399;font-weight:600;margin-top:10px">✓ Your table is confirmed — see you soon!</div>';
+      else if (status === 'completed') note = '<div style="color:var(--text-muted);margin-top:10px">Visit completed — thanks for dining with us!</div>';
+      else note = '<div style="color:#fbbf24;font-weight:600;margin-top:10px">⏳ Awaiting confirmation from the restaurant.</div>';
+      return '<div class="order-card">' +
+        '<div class="order-card-head"><span class="order-id">📅 ' + dateStr + '</span>' +
+        '<span class="order-pill" style="background:' + color + '">' + (labels[status] || status) + '</span></div>' +
+        '<div class="order-card-items">' + meta + '</div>' +
+        (b.notes ? '<div class="order-date" style="color:var(--text-muted);font-size:.82rem">“' + b.notes + '”</div>' : '') +
+        note +
       '</div>';
     }).join('');
   },

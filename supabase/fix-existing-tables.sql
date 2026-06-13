@@ -2,11 +2,12 @@
 -- Run this ONCE in the Supabase SQL editor. It is idempotent (safe to re-run).
 --
 -- It reconciles older tables with what the app actually inserts, fixing every
--- error class you can hit on checkout / payment:
+-- error class you can hit on checkout / payment / booking:
 --   * "Could not find the 'currency' column ..."        -> adds missing columns
 --   * "invalid input syntax for type integer: 83.1276"  -> retypes money columns
 --   * "null value in column ... violates not-null ..."  -> relaxes legacy NOT NULLs
 --   * "operator does not exist: uuid = text"            -> fixes RLS policy casts
+--   * bookings silently not saving                       -> adds columns + open RLS
 
 create extension if not exists "pgcrypto";
 
@@ -52,10 +53,32 @@ alter table public.payments add column if not exists order_payload       jsonb;
 
 alter table public.payments alter column amount type numeric using amount::numeric;
 
+/* ===================== BOOKINGS =====================
+   Reservations were silently failing to save: any insert error fell back to
+   localStorage, so the form showed success but nothing reached the database.
+   Reconcile columns + open RLS so reservations persist and both the customer
+   and the admin panel can read them. */
+alter table public.bookings add column if not exists user_id    uuid;
+alter table public.bookings add column if not exists name       text;
+alter table public.bookings add column if not exists email      text;
+alter table public.bookings add column if not exists phone      text;
+alter table public.bookings add column if not exists date       text;
+alter table public.bookings add column if not exists "time"     text;
+alter table public.bookings add column if not exists guests     int;
+alter table public.bookings add column if not exists occasion   text;
+alter table public.bookings add column if not exists notes      text;
+alter table public.bookings add column if not exists status     text default 'pending';
+alter table public.bookings add column if not exists created_at timestamptz not null default now();
+
+-- guests must be an integer (older tables may have stored it as text).
+alter table public.bookings
+  alter column guests type int
+  using nullif(regexp_replace(guests::text, '[^0-9]', '', 'g'), '')::int;
+
 /* ===== Relax leftover NOT NULL constraints on legacy columns =====
    Older versions of these tables can have NOT NULL columns the current app
-   does not populate (e.g. payments.payment_id). Drop NOT NULL on any column
-   that has no default — except the primary key — so inserts never fail. */
+   does not populate. Drop NOT NULL on any column that has no default —
+   except the primary key — so inserts never fail. */
 do $$
 declare r record;
 begin
@@ -63,7 +86,7 @@ begin
     select table_name, column_name
     from information_schema.columns
     where table_schema = 'public'
-      and table_name in ('orders','payments')
+      and table_name in ('orders','payments','bookings')
       and is_nullable = 'NO'
       and column_default is null
       and column_name <> 'id'
@@ -82,6 +105,16 @@ drop policy if exists "payments_select_own" on public.payments;
 create policy "payments_select_own" on public.payments
   for select to authenticated
   using ((select auth.uid())::text = user_id::text);
+
+-- Bookings: anyone can create a reservation; customer + admin can read/update.
+-- (Customer history is filtered client-side by user_id.)
+alter table public.bookings enable row level security;
+drop policy if exists "bookings_insert_any" on public.bookings;
+create policy "bookings_insert_any" on public.bookings for insert with check (true);
+drop policy if exists "bookings_select_any" on public.bookings;
+create policy "bookings_select_any" on public.bookings for select using (true);
+drop policy if exists "bookings_update_any" on public.bookings;
+create policy "bookings_update_any" on public.bookings for update using (true);
 
 -- Profiles (only if the table exists): fix the same uuid = text comparison
 -- without breaking inserts/reads.
