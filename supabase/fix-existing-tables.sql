@@ -8,6 +8,7 @@
 --   * "null value in column ... violates not-null ..."  -> relaxes legacy NOT NULLs
 --   * "operator does not exist: uuid = text"            -> fixes RLS policy casts
 --   * bookings silently not saving                       -> adds columns + open RLS
+--   * editable menu in the database                      -> menu_items columns + RLS
 
 create extension if not exists "pgcrypto";
 
@@ -75,6 +76,29 @@ alter table public.bookings
   alter column guests type int
   using nullif(regexp_replace(guests::text, '[^0-9]', '', 'g'), '')::int;
 
+/* ===================== MENU ITEMS =====================
+   The full menu can now live in the database so the admin can edit every dish
+   (built-in dishes are imported as override rows). Make sure every column the
+   app reads/writes exists, including the add-ons list. */
+create table if not exists public.menu_items (
+  id text primary key,
+  created_at timestamptz not null default now()
+);
+alter table public.menu_items add column if not exists name        text;
+alter table public.menu_items add column if not exists description text;
+alter table public.menu_items add column if not exists price       numeric;
+alter table public.menu_items add column if not exists category    text;
+alter table public.menu_items add column if not exists image       text;
+alter table public.menu_items add column if not exists type        text;
+alter table public.menu_items add column if not exists spicy       int;
+alter table public.menu_items add column if not exists rating      numeric;
+alter table public.menu_items add column if not exists reviews     int;
+alter table public.menu_items add column if not exists featured    boolean default false;
+alter table public.menu_items add column if not exists popular     boolean default false;
+alter table public.menu_items add column if not exists addons      jsonb default '[]'::jsonb;
+
+alter table public.menu_items alter column price type numeric using price::numeric;
+
 /* ===== Relax leftover NOT NULL constraints on legacy columns =====
    Older versions of these tables can have NOT NULL columns the current app
    does not populate. Drop NOT NULL on any column that has no default —
@@ -86,7 +110,7 @@ begin
     select table_name, column_name
     from information_schema.columns
     where table_schema = 'public'
-      and table_name in ('orders','payments','bookings')
+      and table_name in ('orders','payments','bookings','menu_items')
       and is_nullable = 'NO'
       and column_default is null
       and column_name <> 'id'
@@ -115,6 +139,18 @@ drop policy if exists "bookings_select_any" on public.bookings;
 create policy "bookings_select_any" on public.bookings for select using (true);
 drop policy if exists "bookings_update_any" on public.bookings;
 create policy "bookings_update_any" on public.bookings for update using (true);
+
+-- Menu items: the admin panel uses the public anon key, so allow full
+-- read/write. (The panel itself is gated behind the admin login.)
+alter table public.menu_items enable row level security;
+drop policy if exists "menu_items_select_any" on public.menu_items;
+create policy "menu_items_select_any" on public.menu_items for select using (true);
+drop policy if exists "menu_items_insert_any" on public.menu_items;
+create policy "menu_items_insert_any" on public.menu_items for insert with check (true);
+drop policy if exists "menu_items_update_any" on public.menu_items;
+create policy "menu_items_update_any" on public.menu_items for update using (true);
+drop policy if exists "menu_items_delete_any" on public.menu_items;
+create policy "menu_items_delete_any" on public.menu_items for delete using (true);
 
 -- Profiles (only if the table exists): fix the same uuid = text comparison
 -- without breaking inserts/reads.

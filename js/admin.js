@@ -14,6 +14,7 @@ const Admin = {
     this.initOrders();
     this.initPayments();
     this.initMenuManage();
+    this.initOrderAlerts();
   },
 
   page() { return window.location.pathname.split('/').pop() || 'index.html'; },
@@ -150,12 +151,25 @@ const Admin = {
     renderDisplay();
   },
 
-  /* ---------- Bookings ---------- */
+  /* ---------- Bookings ----------
+     Reservation flow: pending → confirmed → completed. Cancelled is terminal.
+     Confirm/Complete/Cancel each ask for confirmation; confirmed, completed
+     and cancelled bookings are locked from further changes. */
   initBookings() {
     if (!document.getElementById('bookingsTable')) return;
     this.renderBookings();
     const f = document.getElementById('bookingFilter');
     f?.addEventListener('change', () => this.renderBookings(f.value));
+  },
+  bookingActions(b) {
+    const s = (b.status || 'pending').toLowerCase();
+    if (s === 'cancelled') return `<span class="order-locked" style="color:#f87171;font-weight:600">✕ Cancelled</span>`;
+    if (s === 'completed') return `<span class="order-locked" style="color:#34d399;font-weight:600">✓ Completed</span>`;
+    let html = '';
+    if (s === 'pending')   html += `<button class="mini-btn ok booking-action" data-id="${b.id}" data-action="confirm" data-label="Confirm">Confirm</button>`;
+    if (s === 'confirmed') html += `<button class="mini-btn booking-action" data-id="${b.id}" data-action="complete" data-label="Complete">Complete</button>`;
+    html += `<button class="mini-btn danger booking-action" data-id="${b.id}" data-action="cancel" data-label="Cancel">Cancel</button>`;
+    return html;
   },
   async renderBookings(filter = 'all') {
     const tb = document.getElementById('bookingsTable');
@@ -171,18 +185,25 @@ const Admin = {
           <td>${b.guests}</td>
           <td>${b.occasion || '—'}</td>
           <td><span class="status-pill" style="--c:${Utils.getStatusColor(b.status)}">${b.status}</span></td>
-          <td class="td-actions">
-            <button class="mini-btn ok booking-action" data-id="${b.id}" data-action="confirm">Confirm</button>
-            <button class="mini-btn booking-action" data-id="${b.id}" data-action="complete">Complete</button>
-            <button class="mini-btn danger booking-action" data-id="${b.id}" data-action="cancel">Cancel</button>
-          </td>
+          <td class="td-actions">${this.bookingActions(b)}</td>
         </tr>`).join('');
-      tb.querySelectorAll('.booking-action').forEach(btn => btn.addEventListener('click', () => this.updateBooking(btn.dataset.id, btn.dataset.action)));
+      tb.querySelectorAll('.booking-action').forEach(btn => btn.addEventListener('click', () => this.updateBooking(btn.dataset.id, btn.dataset.action, btn.dataset.label)));
     } catch (e) { tb.innerHTML = `<tr><td colspan="8" class="td-empty">Error loading bookings</td></tr>`; }
   },
-  async updateBooking(id, action) {
-    await API.updateBookingStatus(id, action);
-    Utils.showToast(`Booking ${action}ed`, 'success');
+  async updateBooking(id, action, label) {
+    const prompts = {
+      confirm:  'Confirm this reservation? The customer will see it as confirmed.',
+      complete: 'Mark this reservation as completed?',
+      cancel:   'Cancel this reservation? This cannot be undone.'
+    };
+    if (!window.confirm(prompts[action] || `${label || 'Update reservation'} — confirm?`)) return;
+    try {
+      await API.updateBookingStatus(id, action);
+      const said = { confirm: 'confirmed', complete: 'completed', cancel: 'cancelled' }[action] || action;
+      Utils.showToast(`Reservation ${said}`, 'success');
+    } catch (e) {
+      Utils.showToast(e.message || 'Could not update reservation', 'error');
+    }
     this.renderBookings(document.getElementById('bookingFilter')?.value || 'all');
   },
 
@@ -253,6 +274,86 @@ const Admin = {
     this.renderOrders(document.getElementById('orderFilter')?.value || 'all');
   },
 
+  /* ---------- New-order alerts (badge + sound) ----------
+     Polls for orders still awaiting action (status 'pending') and shows a live
+     count on the sidebar Orders link. When a brand-new pending order appears,
+     it chimes and pops a toast. The count clears as soon as each order is
+     accepted (confirmed) or cancelled. */
+  _seenPendingIds: null,
+  _audioCtx: null,
+  _orderBaseTitle: '',
+  primeAudio() {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      this._audioCtx = this._audioCtx || new Ctx();
+      if (this._audioCtx.state === 'suspended') this._audioCtx.resume();
+    } catch (_) {}
+  },
+  playChime() {
+    this.primeAudio();
+    const ctx = this._audioCtx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    [[880, 0], [1175, 0.16]].forEach(([freq, t]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + t);
+      gain.gain.exponentialRampToValueAtTime(0.3, now + t + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + t + 0.15);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(now + t); osc.stop(now + t + 0.16);
+    });
+  },
+  orderBadge() {
+    const link = document.querySelector('.admin-nav a[href="orders.html"]');
+    if (!link) return null;
+    let badge = link.querySelector('.nav-count');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'nav-count';
+      badge.style.cssText = 'display:none;min-width:18px;padding:1px 7px;margin-left:7px;border-radius:11px;background:#ef4444;color:#fff;font-size:.72rem;font-weight:800;line-height:1.5;text-align:center;vertical-align:middle';
+      link.appendChild(badge);
+    }
+    return badge;
+  },
+  async pollNewOrders() {
+    let pending = [];
+    try { pending = await API.getOrders('pending'); } catch (_) { return; }
+    const ids = pending.map(o => String(o.id));
+    const badge = this.orderBadge();
+    if (badge) {
+      badge.textContent = ids.length;
+      badge.style.display = ids.length ? 'inline-block' : 'none';
+    }
+    document.title = (ids.length ? `(${ids.length}) ` : '') + this._orderBaseTitle;
+    if (this._seenPendingIds === null) {
+      this._seenPendingIds = new Set(ids);   // baseline — no chime on first load
+      return;
+    }
+    const fresh = ids.filter(id => !this._seenPendingIds.has(id));
+    if (fresh.length) {
+      this.playChime();
+      Utils.showToast(`${fresh.length} new order${fresh.length > 1 ? 's' : ''} received!`, 'success');
+      if (document.getElementById('ordersTable')) {
+        this.renderOrders(document.getElementById('orderFilter')?.value || 'all');
+      }
+    }
+    this._seenPendingIds = new Set(ids);
+  },
+  initOrderAlerts() {
+    if (!document.querySelector('.admin-nav')) return;
+    this._orderBaseTitle = document.title;
+    // Resume audio on first interaction (browsers block autoplay until a gesture).
+    const prime = () => this.primeAudio();
+    window.addEventListener('pointerdown', prime);
+    window.addEventListener('keydown', prime);
+    this.pollNewOrders();
+    setInterval(() => this.pollNewOrders(), 15000);
+  },
+
   /* ---------- Payments (secure super-admin view) ----------
      Reads ALL payments via the admin-payments Edge Function using a
      server-side dashboard key. The key is entered once per session and
@@ -300,11 +401,26 @@ const Admin = {
     if (saved) load(saved);
   },
 
-  /* ---------- Menu management ---------- */
+  /* ---------- Menu management ----------
+     Every dish is editable. Editing a built-in dish upserts an override row
+     into menu_items (same id) which the storefront merges over the default.
+     “Import Default Menu” bulk-loads all built-in dishes into the database. */
   initMenuManage() {
     const form = document.getElementById('addMenuItemForm');
     if (!form) return;
     this.renderMenuItems();
+    const seedBtn = document.getElementById('seedMenuBtn');
+    seedBtn?.addEventListener('click', async () => {
+      if (!window.confirm('Import all default menu items into the database? Existing items are kept and nothing is overwritten.')) return;
+      seedBtn.disabled = true; seedBtn.textContent = 'Importing…';
+      try {
+        const r = await API.seedDefaultMenu();
+        Utils.showToast(r.inserted ? `${r.inserted} item(s) imported to the database` : 'All default items are already in the database', 'success');
+        await this.renderMenuItems();
+      } catch (e) {
+        Utils.showToast(e.message || 'Could not import the menu', 'error');
+      } finally { seedBtn.disabled = false; seedBtn.textContent = 'Import Default Menu'; }
+    });
     form.addEventListener('submit', async e => {
       e.preventDefault();
       const fd = new FormData(form);
@@ -332,25 +448,96 @@ const Admin = {
     if (!c) return;
     const custom = await API.getMenuItems();
     MenuData._custom = custom;
+    const inDb = new Set(custom.map(x => x.id));
     const all = MenuData.getAll();
     c.innerHTML = all.map(item => {
-      const isCustom = custom.some(x => x.id === item.id);
+      const isCustom = String(item.id).startsWith('cust-');
       return `
       <div class="admin-menu-item">
         <img src="${item.image}" alt="${item.name}" loading="lazy">
         <div class="admin-menu-item-info">
           <h4>${item.name}</h4>
-          <span>${CATEGORY_LABELS[item.category] || item.category} · ${Utils.formatPrice(item.price)}</span>
+          <span>${CATEGORY_LABELS[item.category] || item.category} · ${Utils.formatPrice(item.price)}${inDb.has(item.id) ? '' : ' · <em style="color:var(--text-muted)">default</em>'}</span>
         </div>
         <span class="tag ${item.type === 'veg' ? 'veg' : 'nonveg'}">${item.type}</span>
+        <button class="mini-btn ok edit-item" data-id="${item.id}">Edit</button>
         ${isCustom ? `<button class="mini-btn danger del-item" data-id="${item.id}">Delete</button>` : ''}
       </div>`;
     }).join('');
+    c.querySelectorAll('.edit-item').forEach(b => b.addEventListener('click', () => {
+      const item = MenuData.getById(b.dataset.id);
+      if (item) this.openEditModal(item);
+    }));
     c.querySelectorAll('.del-item').forEach(b => b.addEventListener('click', async () => {
+      if (!window.confirm('Remove this item from the menu?')) return;
       await API.deleteMenuItem(b.dataset.id);
       Utils.showToast('Item removed', 'info');
       await this.renderMenuItems();
     }));
+  },
+  // Edit any dish (built-in or custom). Saving upserts a row into menu_items;
+  // for built-in dishes this creates an override the storefront merges by id.
+  openEditModal(item) {
+    const esc = s => (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    document.querySelector('.mi-edit-overlay')?.remove();
+    const cats = ['starters', 'mains', 'grills', 'sides', 'desserts', 'beverages'];
+    const ov = document.createElement('div');
+    ov.className = 'mi-edit-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(3px);z-index:4000;display:flex;align-items:center;justify-content:center;padding:18px';
+    ov.innerHTML = `
+      <div style="background:var(--surface,#1b1714);color:var(--text,#fff);max-width:480px;width:100%;border-radius:16px;padding:24px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+        <h3 style="margin:0 0 16px;font-size:1.25rem">Edit ${esc(item.name)}</h3>
+        <div class="form-group"><label>Name</label><input class="form-control" data-f="name" value="${esc(item.name)}"></div>
+        <div class="form-group"><label>Description</label><textarea class="form-control" data-f="description" rows="3">${esc(item.description)}</textarea></div>
+        <div class="admin-form-grid">
+          <div class="form-group"><label>Price (₹)</label><input class="form-control" type="number" step="0.01" min="0" data-f="price" value="${esc(item.price)}"></div>
+          <div class="form-group"><label>Category</label><select class="form-control" data-f="category">${cats.map(cat => `<option value="${cat}" ${item.category === cat ? 'selected' : ''}>${CATEGORY_LABELS[cat] || cat}</option>`).join('')}</select></div>
+        </div>
+        <div class="admin-form-grid">
+          <div class="form-group"><label>Type</label><select class="form-control" data-f="type"><option value="veg" ${item.type === 'veg' ? 'selected' : ''}>Veg</option><option value="non-veg" ${item.type !== 'veg' ? 'selected' : ''}>Non-Veg</option></select></div>
+          <div class="form-group"><label>Spice (0–3)</label><input class="form-control" type="number" min="0" max="3" data-f="spicy" value="${esc(item.spicy || 0)}"></div>
+        </div>
+        <div class="form-group"><label>Image URL</label><input class="form-control" data-f="image" value="${esc(item.image)}"></div>
+        <div style="display:flex;gap:20px;margin-bottom:18px">
+          <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-f="featured" ${item.featured ? 'checked' : ''}> Featured</label>
+          <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" data-f="popular" ${item.popular ? 'checked' : ''}> Popular</label>
+        </div>
+        <div style="display:flex;gap:12px">
+          <button class="btn btn-ghost mi-cancel" style="flex:1">Cancel</button>
+          <button class="btn btn-primary mi-save" style="flex:1">Save Changes</button>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    const val = f => ov.querySelector(`[data-f="${f}"]`);
+    ov.addEventListener('click', e => { if (e.target === ov) close(); });
+    ov.querySelector('.mi-cancel').addEventListener('click', close);
+    ov.querySelector('.mi-save').addEventListener('click', async () => {
+      const updated = {
+        ...item,
+        name: val('name').value.trim(),
+        description: val('description').value.trim(),
+        price: parseFloat(val('price').value) || 0,
+        category: val('category').value,
+        type: val('type').value,
+        spicy: parseInt(val('spicy').value) || 0,
+        image: val('image').value.trim() || item.image,
+        featured: val('featured').checked,
+        popular: val('popular').checked
+      };
+      if (!updated.name) { Utils.showToast('Name is required', 'error'); return; }
+      const saveBtn = ov.querySelector('.mi-save');
+      saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+      try {
+        await API.upsertMenuItem(updated);
+        Utils.showToast('Menu item updated', 'success');
+        close();
+        await this.renderMenuItems();
+      } catch (e) {
+        saveBtn.disabled = false; saveBtn.textContent = 'Save Changes';
+        Utils.showToast(e.message || 'Could not save changes', 'error');
+      }
+    });
   }
 };
 

@@ -180,7 +180,10 @@ const API = {
     return row;
   },
 
-  /* ---------------- MENU ITEMS (custom) ---------------- */
+  /* ---------------- MENU ITEMS ----------------
+     The whole menu can live in the database (built-in dishes are imported as
+     override rows), so the admin can edit every dish. The storefront merges
+     these rows over the built-in defaults by id (see MenuData.getAll). */
   async getMenuItems() {
     if (this._enabled()) {
       const { data, error } = await SB.client.from('menu_items').select('*').order('created_at', { ascending: true });
@@ -199,6 +202,31 @@ const API = {
     Utils.saveToStorage(CONFIG.customMenuKey, list);
     return item;
   },
+  async updateMenuItem(id, patch) {
+    if (this._enabled()) {
+      const { data, error } = await SB.client.from('menu_items').update(patch).eq('id', id).select().maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const list = Utils.getFromStorage(CONFIG.customMenuKey) || [];
+    const i = list.findIndex(x => x.id === id);
+    if (i >= 0) { list[i] = { ...list[i], ...patch }; Utils.saveToStorage(CONFIG.customMenuKey, list); }
+    return list[i];
+  },
+  // Insert-or-update a menu item by id. Used to edit built-in dishes (creates
+  // an override row) and to persist changes to custom dishes.
+  async upsertMenuItem(item) {
+    if (this._enabled()) {
+      const { data, error } = await SB.client.from('menu_items').upsert(item).select().maybeSingle();
+      if (error) throw new Error(error.message);
+      return data;
+    }
+    const list = Utils.getFromStorage(CONFIG.customMenuKey) || [];
+    const i = list.findIndex(x => x.id === item.id);
+    if (i >= 0) list[i] = { ...list[i], ...item }; else list.push(item);
+    Utils.saveToStorage(CONFIG.customMenuKey, list);
+    return item;
+  },
   async deleteMenuItem(id) {
     if (this._enabled()) {
       const { error } = await SB.client.from('menu_items').delete().eq('id', id);
@@ -209,6 +237,18 @@ const API = {
     list = list.filter(x => x.id !== id);
     Utils.saveToStorage(CONFIG.customMenuKey, list);
     return true;
+  },
+  // Import every built-in dish into the database (skips ones already there)
+  // so the whole menu becomes editable from the admin panel.
+  async seedDefaultMenu() {
+    if (!this._enabled()) throw new Error('Connect Supabase to import the menu into the database.');
+    const existing = await this.getMenuItems();
+    const have = new Set(existing.map(x => x.id));
+    const rows = (typeof MENU_DATA !== 'undefined' ? MENU_DATA : []).filter(i => !have.has(i.id)).map(i => ({ ...i }));
+    if (!rows.length) return { inserted: 0 };
+    const { error } = await SB.client.from('menu_items').upsert(rows);
+    if (error) throw new Error(error.message);
+    return { inserted: rows.length };
   },
 
   /* ---------------- PAYMENT QR (admin) ----------------
