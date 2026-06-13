@@ -69,45 +69,65 @@ const Admin = {
       </tr>`).join('');
   },
 
-  /* ---------- Payment QR generator (any admin) ----------
-     Generates a custom-price UPI QR via the create-qr Edge Function and polls
-     qr_payments for the webhook-confirmed 'paid' status. */
+  /* ---------- Payment QR terminal (any admin) ----------
+     POS-style page: punch in an amount on the keypad, generate a custom-price
+     UPI QR via the create-qr Edge Function, then poll qr_payments for the
+     webhook-confirmed 'paid' status. */
   initQrGenerator() {
     const wrap = document.getElementById('qrGen');
     if (!wrap) return;
-    const amountEl = document.getElementById('qrAmount');
+    const display = document.getElementById('qrAmount');
+    const keypad = document.getElementById('qrKeypad');
     const noteEl = document.getElementById('qrNote');
     const genBtn = document.getElementById('qrGenerateBtn');
+    const terminal = document.getElementById('qrTerminal');
     const result = document.getElementById('qrResult');
     const img = document.getElementById('qrImage');
     const amtLabel = document.getElementById('qrAmountLabel');
     const statusEl = document.getElementById('qrStatus');
     const resetBtn = document.getElementById('qrResetBtn');
+    let digits = '';
     let pollTimer = null;
 
+    const amountValue = () => parseInt(digits || '0', 10) / 100;
+    const renderDisplay = () => { if (display) display.textContent = Utils.formatPrice(amountValue()); };
     const stopPoll = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
+
+    keypad?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-key]');
+      if (!btn) return;
+      const k = btn.dataset.key;
+      if (k === 'clear') digits = '';
+      else if (k === 'back') digits = digits.slice(0, -1);
+      else digits = (digits + k).replace(/^0+/, '');
+      if (digits.length > 9) digits = digits.slice(0, 9);
+      renderDisplay();
+    });
 
     const reset = () => {
       stopPoll();
-      if (result) result.style.display = 'none';
-      if (amountEl) amountEl.value = '';
+      digits = '';
+      renderDisplay();
       if (noteEl) noteEl.value = '';
+      if (result) result.style.display = 'none';
+      if (terminal) terminal.style.display = '';
       if (genBtn) { genBtn.disabled = false; genBtn.textContent = 'Generate QR'; }
     };
-
     resetBtn?.addEventListener('click', reset);
 
     genBtn?.addEventListener('click', async () => {
-      const amount = parseFloat(amountEl?.value);
-      if (!amount || amount < 1) { Utils.showToast('Enter a valid amount', 'error'); return; }
+      const amount = amountValue();
+      if (!amount || amount < 1) { Utils.showToast('Enter an amount of at least ₹1', 'error'); return; }
       genBtn.disabled = true;
       genBtn.textContent = 'Generating…';
       try {
         const qr = await API.createQr(amount, (noteEl?.value || '').trim());
         if (img) img.src = qr.image_url;
         if (amtLabel) amtLabel.textContent = Utils.formatPrice(amount);
-        if (statusEl) { statusEl.textContent = 'Waiting for payment…'; statusEl.style.color = '#fbbf24'; }
+        if (statusEl) { statusEl.className = 'qr-status-lbl waiting'; statusEl.innerHTML = '<span class="qr-dot"></span> Waiting for payment…'; }
+        if (terminal) terminal.style.display = 'none';
         if (result) result.style.display = '';
+        genBtn.disabled = false;
         genBtn.textContent = 'Generate QR';
         stopPoll();
         pollTimer = setInterval(async () => {
@@ -115,10 +135,7 @@ const Admin = {
             const row = await API.getQrStatus(qr.id);
             if (row && row.status === 'paid') {
               stopPoll();
-              if (statusEl) {
-                statusEl.textContent = '✓ Payment received — ' + Utils.formatPrice(row.amount || amount);
-                statusEl.style.color = '#34d399';
-              }
+              if (statusEl) { statusEl.className = 'qr-status-lbl paid'; statusEl.textContent = '✓ Payment received — ' + Utils.formatPrice(row.amount || amount); }
               Utils.showToast('Payment received!', 'success');
             }
           } catch (_) { /* keep polling */ }
@@ -129,6 +146,8 @@ const Admin = {
         Utils.showToast(e.message || 'Could not generate QR', 'error');
       }
     });
+
+    renderDisplay();
   },
 
   /* ---------- Bookings ---------- */
