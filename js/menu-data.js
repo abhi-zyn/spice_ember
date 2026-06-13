@@ -66,7 +66,14 @@ const MenuData = {
     return this._custom;
   },
   getAll() {
-    return [...MENU_DATA, ...(this._custom || [])];
+    const custom = this._custom || [];
+    if (!custom.length) return [...MENU_DATA];
+    // DB/custom rows override built-in defaults by id (so admin edits to
+    // built-in dishes take effect), and brand-new custom items are appended.
+    const byId = new Map();
+    MENU_DATA.forEach(i => byId.set(i.id, i));
+    custom.forEach(i => byId.set(i.id, { ...(byId.get(i.id) || {}), ...i }));
+    return [...byId.values()];
   },
   getById(id) { return this.getAll().find(i => i.id === id); },
   getByCategory(c) { return (!c || c === 'all') ? this.getAll() : this.getAll().filter(i => i.category === c); },

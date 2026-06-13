@@ -44,7 +44,7 @@ const Components = {
       { id: 'menu', label: 'Menu', href: b + 'menu.html' },
       { id: 'book', label: 'Reserve', href: b + 'book-table.html' },
       { id: 'order', label: 'Cart', href: b + 'order.html' },
-      { id: 'orders', label: 'My Orders', href: b + 'my-orders.html' },
+      { id: 'orders', label: 'My Orders & Reservations', href: b + 'my-orders.html' },
       { id: 'about', label: 'About', href: b + 'about.html' }
     ];
     return links.map(l => `<a href="${l.href}" class="${active === l.id ? 'active' : ''}">${l.label}</a>`).join('');
@@ -78,7 +78,7 @@ const Components = {
       <button class="btn btn-primary" data-auth-open data-auth-mobile-login>Login / Sign Up</button>
       <div class="mobile-account" data-auth-mobile-account style="display:none">
         <div class="mobile-account-name" data-auth-mobile-name></div>
-        <a href="${b}my-orders.html" class="btn btn-ghost btn-block" style="margin-bottom:8px">My Orders</a>
+        <a href="${b}my-orders.html" class="btn btn-ghost btn-block" style="margin-bottom:8px">My Orders & Reservations</a>
         <button class="btn btn-primary btn-block" data-auth-logout>Log Out</button>
       </div>
     </aside>`;
